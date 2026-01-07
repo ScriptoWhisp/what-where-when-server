@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Game Timer Test</title>
+  <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+  <style>
+      body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+      .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+      .timer-box { font-size: 4em; font-weight: bold; text-align: center; margin: 20px 0; }
+      .status { padding: 5px 10px; border-radius: 4px; font-weight: bold; }
+      .status.THINKING { background-color: #e3f2fd; color: #0d47a1; }
+      .status.ANSWERING { background-color: #ffebee; color: #c62828; }
+      .status.PAUSED { background-color: #fff3e0; color: #ef6c00; }
+      button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+      #logs { background: #f4f4f4; padding: 10px; height: 150px; overflow-y: scroll; border: 1px solid #ddd; font-family: monospace; font-size: 12px;}
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <h2>🔌 Connection</h2>
+  <input type="text" id="gameId" value="room-1" placeholder="Game ID">
+  <button onclick="joinGame()">Join Game</button>
+  <span id="connectionStatus" style="color: red;">Disconnected</span>
+</div>
+
+<div class="card">
+  <h2>⏱️ Timer Display (Player View)</h2>
+  <div class="timer-box" id="timerDisplay">00</div>
+  <div style="text-align: center;">
+    Phase: <span id="phaseDisplay" class="status">IDLE</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>🛠️ Admin Controls</h2>
+  <button onclick="startQuestion()">▶ Start Question (60s)</button>
+  <button onclick="pauseTimer()">⏸ Pause</button>
+  <button onclick="resumeTimer()">⏯ Resume</button>
+</div>
+
+<h3>Events Log:</h3>
+<div id="logs"></div>
+
+<script>
+
+  const socket = io('http://localhost:3000/game', {
+    transports: ['websocket']
+  });
+
+  const logDiv = document.getElementById('logs');
+  const timerDisplay = document.getElementById('timerDisplay');
+  const phaseDisplay = document.getElementById('phaseDisplay');
+  const statusSpan = document.getElementById('connectionStatus');
+
+  function log(message) {
+    const el = document.createElement('div');
+    el.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    logDiv.prepend(el);
+  }
+
+
+  socket.on('connect', () => {
+    statusSpan.textContent = 'Connected';
+    statusSpan.style.color = 'green';
+    log('Connected to server!');
+  });
+
+  socket.on('disconnect', () => {
+    statusSpan.textContent = 'Disconnected';
+    statusSpan.style.color = 'red';
+    log('Disconnected form server.');
+  });
+
+  socket.on('timer_state', (data) => {
+    timerDisplay.textContent = data.remainingSeconds;
+    phaseDisplay.textContent = data.phase;
+
+    phaseDisplay.className = 'status ' + data.phase;
+
+    if (window.lastPhase !== data.phase) {
+      log(`State update: ${data.phase} (${data.remainingSeconds}s)`);
+      window.lastPhase = data.phase;
+    }
+  });
+
+
+  function joinGame() {
+    const gameId = document.getElementById('gameId').value;
+    socket.emit('join_game', { gameId });
+    log(`Sent join_game for room: ${gameId}`);
+  }
+
+  function startQuestion() {
+    const gameId = document.getElementById('gameId').value;
+    socket.emit('admin:start_question', { gameId });
+    log('Sent admin:start_question');
+  }
+
+  function pauseTimer() {
+    const gameId = document.getElementById('gameId').value;
+    socket.emit('admin:pause', { gameId });
+    log('Sent admin:pause');
+  }
+
+  function resumeTimer() {
+    const gameId = document.getElementById('gameId').value;
+    socket.emit('admin:resume', { gameId });
+    log('Sent admin:resume');
+  }
+</script>
+</body>
+</html>
