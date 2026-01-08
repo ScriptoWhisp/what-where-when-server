@@ -64,14 +64,9 @@ export class HostController {
   @Post('games/create')
   async createGame(
     @HostUser() host: HostJwtPayload,
-    @Body() body: { title: string; date_of_event: string; passcode?: string },
+    @Body() body: { title: string; date_of_event: string },
   ): Promise<gameDto.HostGameGetResponse> {
-    return this.host.createGame(
-      host.sub,
-      body.title,
-      body.date_of_event,
-      body.passcode,
-    );
+    return this.host.createGame(host.sub, body.title, body.date_of_event);
   }
 
   @UseGuards(HostJwtAuthGuard)

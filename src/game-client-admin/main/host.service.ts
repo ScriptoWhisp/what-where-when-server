@@ -29,13 +29,10 @@ export class HostService {
     hostId: number,
     title: string,
     date_of_event: string,
-    passcode?: string,
   ): Promise<HostGameGetResponse> {
     const date = parseDateOfEvent(date_of_event);
 
-    let code: number | undefined = passcode
-      ? Number(passcode.trim())
-      : undefined;
+    let code: number | undefined;
     if (!code || Number.isNaN(code)) {
       for (let i = 0; i < 10; i++) {
         const candidate = generate4DigitPasscode();

@@ -5,8 +5,8 @@ import { HostController } from './controller/host.controller';
 import { HostService } from './main/host.service';
 import { HostAuthService } from './main/auth/host-auth.service';
 import { HostJwtStrategy } from './main/auth/jwt.strategy';
-import { UserRepository } from '../repository2/user.repository';
-import { GameRepository } from '../repository2/game.repository';
+import { UserRepository } from '../repository/user.repository';
+import { GameRepository } from '../repository/game.repository';
 
 @Module({
   imports: [
