@@ -9,11 +9,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-jobs:
-  lint_typecheck_unit:
-    name: Lint + Typecheck + Unit
-    runs-on: ubuntu-latest
+permissions:
+  contents: read
 
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -22,16 +24,27 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --no-audit --prefer-offline
 
-      - name: Lint
-        run: npm run lint
+      - run: npm run lint
 
-      - name: Unit tests
-        run: npm run test:unit
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci --no-audit --prefer-offline
+
+      - run: npm run test:unit
 
   e2e:
-    name: E2E (Postgres)
+    name: E2E tests (Postgres)
     runs-on: ubuntu-latest
 
     services:
@@ -62,13 +75,19 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
+      - run: npm ci --no-audit --prefer-offline
 
-      - name: Prisma generate
-        run: npx prisma generate
+      - run: npx prisma generate
 
-      - name: Migrate test DB
-        run: npx prisma migrate deploy
+      - name: Apply migrations (fallback to db push if none)
+        shell: bash
+        run: |
+          set -e
+          if [ -d "prisma/migrations" ] && [ "$(ls -A prisma/migrations 2>/dev/null)" ]; then
+            npx prisma migrate deploy
+          else
+            echo "No prisma/migrations found, using db push"
+            npx prisma db push
+          fi
 
-      - name: Run e2e
-        run: npm run test:e2e
+      - run: npm run test:e2e
