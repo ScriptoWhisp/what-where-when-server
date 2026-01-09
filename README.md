@@ -115,6 +115,13 @@ All checks must pass before merging to `main`.
 
 ---
 
+## Project status
+
+This project is currently developed as part of a bachelor's degree program.
+
+The codebase is proprietary. Any commercial use or redistribution requires
+explicit permission from the authors.
+
 ## License
 
 This project is proprietary software.
