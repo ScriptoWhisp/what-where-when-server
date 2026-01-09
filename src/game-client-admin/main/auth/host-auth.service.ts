@@ -84,10 +84,6 @@ export class HostAuthService {
       { expiresIn: DEFAULT_TOKEN_TTL_SECONDS },
     );
 
-    const secretUsedByJwtService = (this.jwt as any).options?.secret;
-    console.log('JwtService secret option:', secretUsedByJwtService);
-    console.log('Env secret:', process.env.JWT_SECRET);
-
     return {
       user: {
         id: user.id,

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+import { ConfigService } from '@nestjs/config';
 import { HostController } from './controller/host.controller';
 import { HostService } from './host.service';
 import { HostAuthService } from './auth/host-auth.service';
@@ -8,13 +9,18 @@ import { HostJwtStrategy } from './auth/jwt.strategy';
 import { UserRepository } from '../../repository/user.repository';
 import { GameRepository } from '../../repository/game.repository';
 import { HostJwtAuthGuard } from './auth/jwt-auth.guard';
+import { AppConfigModule } from '../../config/app-config.module';
 
 @Module({
   imports: [
+    AppConfigModule,
     PassportModule.register({ defaultStrategy: 'host-jwt' }),
-    JwtModule.register({
-      secret: process.env.JWT_SECRET ?? 'dev_secret_change_me',
-      signOptions: { expiresIn: 12 * 60 * 60 },
+    JwtModule.registerAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        secret: config.get<string>('JWT_SECRET') ?? 'dev_secret_change_me',
+        signOptions: { expiresIn: 12 * 60 * 60 },
+      }),
     }),
   ],
   controllers: [HostController],
@@ -22,6 +28,7 @@ import { HostJwtAuthGuard } from './auth/jwt-auth.guard';
     HostService,
     HostAuthService,
     HostJwtStrategy,
+    HostJwtAuthGuard,
     UserRepository,
     GameRepository,
   ],
