@@ -2,9 +2,7 @@ import {
   Body,
   Controller,
   Post,
-  Query,
   UseGuards,
-  BadRequestException,
 } from '@nestjs/common';
 import { HostAuthService } from '../auth/host-auth.service';
 import { HostJwtAuthGuard } from '../auth/jwt-auth.guard';
