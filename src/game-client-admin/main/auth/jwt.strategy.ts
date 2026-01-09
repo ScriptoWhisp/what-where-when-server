@@ -18,12 +18,11 @@ export class HostJwtStrategy extends PassportStrategy(
 ) {
   constructor(config: ConfigService) {
     const secret = config.get<string>('JWT_SECRET') ?? 'dev_secret_change_me';
-    const options: passportJwt.StrategyOptions = {
+    super({
+      secretOrKey: secret,
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: secret,
-    };
-    super(options);
+    });
   }
 
   validate(payload: HostJwtPayload): HostJwtPayload {

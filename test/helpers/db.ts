@@ -1,11 +1,5 @@
 import type { PrismaService } from '../../src/repository/prisma/prisma.service';
 
-/**
- * Clean Postgres schema between tests.
- *
- * - works with Prisma adapter-pg
- * - avoids ordering issues by TRUNCATE ... CASCADE
- */
 export async function resetDb(prisma: PrismaService): Promise<void> {
   const tables = (
     await prisma.$queryRawUnsafe<{ tablename: string }[]>(
@@ -13,7 +7,6 @@ export async function resetDb(prisma: PrismaService): Promise<void> {
     )
   )
     .map((r) => r.tablename)
-    // Prisma's migrations table is safe to keep.
     .filter((t) => t !== '_prisma_migrations');
 
   if (tables.length === 0) return;

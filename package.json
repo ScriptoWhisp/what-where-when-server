@@ -16,8 +16,8 @@
     "test": "jest -c jest.config.js",
     "test:unit": "jest -c jest.unit.config.js",
     "test:e2e": "jest -c jest.e2e.config.js",
-    "test:watch": "jest -c jest.unit.config.js --watch",
     "test:cov": "jest -c jest.unit.config.js --coverage",
+    "test:watch": "jest -c jest.unit.config.js --watch",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand"
   },
   "dependencies": {

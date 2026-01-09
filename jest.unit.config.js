@@ -6,8 +6,7 @@ module.exports = {
   roots: ['<rootDir>/src'],
   testMatch: ['**/*.spec.ts'],
   testPathIgnorePatterns: ['/node_modules/', '/dist/'],
-  transform: {
-    '^.+\\.(t|j)s$': 'ts-jest',
-  },
-  testEnvironment: 'node'
+  transform: { '^.+\\.(t|j)s$': 'ts-jest' },
+  testEnvironment: 'node',
+  setupFiles: ['<rootDir>/test/setup-env.ts'],
 };
