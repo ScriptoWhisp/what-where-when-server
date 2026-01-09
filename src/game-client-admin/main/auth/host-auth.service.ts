@@ -14,7 +14,7 @@ import {
   type HostPassdropResponse,
   HostRegisterResponse,
   HostRoles,
-} from '../../dto/auth.dto';
+} from '../dto/auth.dto';
 
 const DEFAULT_TOKEN_TTL_SECONDS = 12 * 60 * 60; // 12h
 
@@ -83,6 +83,10 @@ export class HostAuthService {
       { sub: user.id, email: user.email, role: user.role },
       { expiresIn: DEFAULT_TOKEN_TTL_SECONDS },
     );
+
+    const secretUsedByJwtService = (this.jwt as any).options?.secret;
+    console.log('JwtService secret option:', secretUsedByJwtService);
+    console.log('Env secret:', process.env.JWT_SECRET);
 
     return {
       user: {

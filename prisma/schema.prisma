@@ -54,8 +54,8 @@ model Game {
   showLeaderboard Boolean @default(true) @map("show_leaderboard")
   canAppeal       Boolean @default(true) @map("can_appeal")
 
-  createdAt  DateTime  @default(now()) @map("created_at")
-  modifiedAt DateTime? @map("modified_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  modifiedAt DateTime @default(now()) @map("modified_at")
 
   host User @relation("HostGames", fields: [hostId], references: [id])
 
@@ -107,7 +107,7 @@ model GameParticipant {
   teamId      Int      @map("team_id")
   gameId      Int      @map("game_id")
   categoryId  Int      @map("category_id")
-  isAvailable Boolean? @map("is_available")
+  isAvailable Boolean  @default(true) @map("is_available")
   createdAt   DateTime @default(now()) @map("created_at")
 
   team     Team     @relation(fields: [teamId], references: [id])
@@ -161,12 +161,12 @@ model AnswerStatus {
 }
 
 model Answer {
-  id                Int       @id @default(autoincrement())
-  gameParticipantId Int       @map("game_participant_id")
-  questionId        Int       @map("question_id")
-  answerText        String    @map("answer_text")
-  submittedAt       DateTime? @map("submitted_at")
-  statusId          Int       @map("status")
+  id                Int      @id @default(autoincrement())
+  gameParticipantId Int      @map("game_participant_id")
+  questionId        Int      @map("question_id")
+  answerText        String   @map("answer_text")
+  submittedAt       DateTime @map("submitted_at")
+  statusId          Int      @map("status")
 
   participant GameParticipant @relation(fields: [gameParticipantId], references: [id])
   question    Question        @relation(fields: [questionId], references: [id])

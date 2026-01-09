@@ -5,13 +5,14 @@ import {
 } from '@nestjs/common';
 
 import { GameRepository } from '../../repository/game.repository';
-import { generate4DigitPasscode, parseDateOfEvent } from '../utils/game.util';
+import { generate4DigitPasscode, parseDateOfEvent } from './utils/game.util';
 import {
   HostGameGetResponse,
   HostGamesListResponse,
   SaveGameRequest,
   SaveGameResponse,
 } from '../../repository/contracts/game.dto';
+import { GameStatuses } from '../../repository/contracts/common.dto';
 
 @Injectable()
 export class HostService {
@@ -31,34 +32,14 @@ export class HostService {
     date_of_event: string,
   ): Promise<HostGameGetResponse> {
     const date = parseDateOfEvent(date_of_event);
-
-    let code: number | undefined;
-    if (!code || Number.isNaN(code)) {
-      for (let i = 0; i < 10; i++) {
-        const candidate = generate4DigitPasscode();
-        const exists = await this.games.findByPasscode(candidate);
-        if (!exists) {
-          code = candidate;
-          break;
-        }
-      }
-      if (!code) code = generate4DigitPasscode();
-    } else {
-      const exists = await this.games.findByPasscode(code);
-      if (exists) {
-        throw new ConflictException({
-          code: 'CONFLICT',
-          message: 'passcode already exists',
-        });
-      }
-    }
+    const code = generate4DigitPasscode();
 
     const created = await this.games.createGame({
       hostId,
       name: title,
       date,
       passcode: code,
-      status: 'DRAFT',
+      status: GameStatuses.DRAFT,
     });
 
     const full = await this.games.getHostGameDetails({

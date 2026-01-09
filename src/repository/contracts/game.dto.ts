@@ -86,9 +86,7 @@ export interface SaveGameRequest {
   game: Omit<
     HostGameDetails,
     'id' | 'updated_at' | 'version' | 'status' | 'passcode'
-  > & {
-    passcode?: string;
-  };
+  >
 
   deleted_round_ids?: ID[];
   deleted_question_ids?: ID[];

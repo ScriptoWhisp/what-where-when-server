@@ -6,10 +6,10 @@ import {
   UseGuards,
   BadRequestException,
 } from '@nestjs/common';
-import { HostAuthService } from '../main/auth/host-auth.service';
-import { HostJwtAuthGuard } from '../main/auth/jwt-auth.guard';
-import { HostUser } from '../main/auth/host-user.decorator';
-import type { HostJwtPayload } from '../main/auth/jwt.strategy';
+import { HostAuthService } from '../auth/host-auth.service';
+import { HostJwtAuthGuard } from '../auth/jwt-auth.guard';
+import { HostUser } from '../auth/host-user.decorator';
+import type { HostJwtPayload } from '../auth/jwt.strategy';
 import type {
   HostLoginRequest,
   HostLoginResponse,
@@ -18,7 +18,7 @@ import type {
   HostPassdropRequest,
   HostPassdropResponse,
 } from '../dto/auth.dto';
-import { HostService } from '../main/host.service';
+import { HostService } from '../host.service';
 import * as gameDto from '../dto/game.dto';
 
 @Controller('host')
@@ -73,15 +73,9 @@ export class HostController {
   @Post('game/get')
   async getGame(
     @HostUser() host: HostJwtPayload,
-    @Query('game_id') gameId?: string,
+    @Body() body: {gameId: number},
   ): Promise<gameDto.HostGameGetResponse> {
-    if (!gameId) {
-      throw new BadRequestException({
-        code: 'VALIDATION_ERROR',
-        message: 'game_id is required',
-      });
-    }
-    return this.host.getGame(host.sub, Number(gameId));
+    return this.host.getGame(host.sub, body.gameId);
   }
 
   @UseGuards(HostJwtAuthGuard)
