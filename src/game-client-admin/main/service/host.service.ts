@@ -2,16 +2,19 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-
-import { GameRepository } from '../../repository/game.repository';
-import { generate4DigitPasscode, parseDateOfEvent } from './utils/game.util';
+import { GameRepository } from '../../../repository/game.repository';
 import {
   HostGameGetResponse,
   HostGamesListResponse,
   SaveGameRequest,
   SaveGameResponse,
-} from '../../repository/contracts/game.dto';
-import { GameStatuses } from '../../repository/contracts/common.dto';
+} from '../../../repository/contracts/game.dto';
+import {
+  generate4DigitPasscode,
+  parseDateOfEvent,
+} from '../../../repository/utils/game.util';
+import { GameStatuses } from '../../../repository/contracts/common.dto';
+
 
 @Injectable()
 export class HostService {

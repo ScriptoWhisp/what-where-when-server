@@ -16,7 +16,7 @@ import type {
   HostPassdropRequest,
   HostPassdropResponse,
 } from '../dto/auth.dto';
-import { HostService } from '../host.service';
+import { HostService } from '../service/host.service';
 import * as gameDto from '../dto/game.dto';
 
 @Controller('host')

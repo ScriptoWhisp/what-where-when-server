@@ -125,9 +125,7 @@ export class GameRepository {
       }
 
       const date = parseDateOfEvent(req.game.date_of_event);
-      const nextPasscode = req.game.passcode
-        ? Number(req.game.passcode)
-        : existing.passcode;
+      const nextPasscode = existing.passcode;
       if (Number.isNaN(nextPasscode)) {
         throw new BadRequestException({
           code: 'VALIDATION_ERROR',
