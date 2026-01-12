@@ -89,6 +89,20 @@ export class GameService {
     return this.getPublicState(gameId);
   }
 
+  adjustTimer(gameId: string, seconds: number) {
+    const state = this.games.get(gameId);
+
+    if (!state) return null;
+
+    state.remainingSeconds += seconds;
+
+    if (state.remainingSeconds < 0) {
+      state.remainingSeconds = 0;
+    }
+
+    return this.getPublicState(gameId);
+  }
+
   private stopInternalTimer(state: GameState) {
     if (state.interval) {
       clearInterval(state.interval);

@@ -50,4 +50,13 @@ export class GameGateway implements OnGatewayConnection {
       this.server.to(data.gameId).emit('timer_state', state);
     });
   }
+
+  @SubscribeMessage('admin:adjust')
+  handleAdjust(@MessageBody() data: { gameId: string; seconds: number }) {
+    const state = this.gameService.adjustTimer(data.gameId, data.seconds);
+
+    if (state) {
+      this.server.to(data.gameId).emit('timer_state', state);
+    }
+  }
 }

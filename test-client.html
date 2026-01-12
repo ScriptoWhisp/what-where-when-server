@@ -39,8 +39,10 @@
   <button onclick="startQuestion()">▶ Start Question (60s)</button>
   <button onclick="pauseTimer()">⏸ Pause</button>
   <button onclick="resumeTimer()">⏯ Resume</button>
+  <hr>
+  <button onclick="adjustTimer(10)">+10s</button>
+  <button onclick="adjustTimer(-10)">-10s</button>
 </div>
-
 <h3>Events Log:</h3>
 <div id="logs"></div>
 
@@ -109,6 +111,12 @@
     const gameId = document.getElementById('gameId').value;
     socket.emit('admin:resume', { gameId });
     log('Sent admin:resume');
+  }
+
+  function adjustTimer(seconds) {
+    const gameId = document.getElementById('gameId').value;
+    socket.emit('admin:adjust', { gameId, seconds });
+    log(`Sent admin:adjust (${seconds > 0 ? '+' : ''}${seconds}s)`);
   }
 </script>
 </body>
