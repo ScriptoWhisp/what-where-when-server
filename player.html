@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WWW Player Interface</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #e6f7ff; line-height: 1.6; }
+        .card { background: white; padding: 25px; border-radius: 12px; max-width: 500px; margin: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-group label { display: block; font-size: 14px; font-weight: bold; color: #555; margin-bottom: 5px; }
+
+        input, textarea, button { width: 100%; padding: 12px; margin: 5px 0; border-radius: 4px; border: 1px solid #ddd; box-sizing: border-box; font-size: 16px; }
+
+        textarea { height: 100px; resize: none; font-family: inherit; }
+
+        button { background: #1890ff; color: white; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #40a9ff; }
+        button:disabled { background: #d9d9d9; cursor: not-allowed; }
+
+        .timer { font-size: 60px; color: #ff4d4f; text-align: center; font-weight: bold; margin: 10px 0; }
+        .phase-label { text-align: center; font-weight: bold; color: #888; text-transform: uppercase; letter-spacing: 1px; }
+
+        #status { text-align: center; font-weight: bold; margin-top: 20px; padding: 10px; border-radius: 4px; background: #f5f5f5; }
+        .score-box { font-size: 20px; color: #1890ff; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2>Team Interface</h2>
+
+    <div style="display: flex; gap: 15px;">
+        <div class="input-group" style="flex: 1;">
+            <label for="gameId">Game ID</label>
+            <input type="number" id="gameId" value="1">
+        </div>
+        <div class="input-group" style="flex: 2;">
+            <label for="pId">Participant ID</label>
+            <input type="number" id="pId" value="5">
+        </div>
+    </div>
+
+    <button onclick="connect()" style="background: #001529;">Join Game Room</button>
+
+    <hr style="margin: 25px 0; border: 0; border-top: 1px solid #eee;">
+
+    <div class="timer" id="timer">--</div>
+    <div class="phase-label" id="phase">Waiting for host...</div>
+
+    <div class="input-group" style="margin-top: 20px;">
+        <label for="answer">Your Team's Answer</label>
+        <textarea id="answer" placeholder="Type the final answer here..."></textarea>
+    </div>
+
+    <button id="sendBtn" onclick="sendAnswer()" disabled style="background: #52c41a;">Submit Final Answer</button>
+
+    <div id="status">
+        <div id="scoreDisplay" class="score-box">Score: 0</div>
+        <div id="connectionText">Not Connected</div>
+    </div>
+</div>
+
+<script>
+    let socket;
+    let isPaused = false;
+
+    function connect() {
+        socket = io('http://localhost:3000/game');
+
+        socket.on('connect', () => {
+            const gId = parseInt(document.getElementById('gameId').value);
+            socket.emit('join_room', { gameId: gId });
+
+            const connText = document.getElementById('connectionText');
+            connText.innerText = 'Online: Room ' + gId;
+            connText.style.color = 'green';
+        });
+
+        socket.on('timer_update', (data) => {
+            document.getElementById('timer').innerText = data.seconds;
+            document.getElementById('phase').innerText = 'Phase: ' + data.phase;
+
+            const isAnswering = (data.phase === 'ANSWERING');
+            const alreadySent = document.getElementById('connectionText').innerText.includes('RECEIVED');
+
+            document.getElementById('sendBtn').disabled = !isAnswering || alreadySent;
+
+            document.getElementById('timer').style.color = isAnswering ? '#52c41a' : '#ff4d4f';
+        });
+
+        socket.on('timer_paused', () => {
+            document.getElementById('phase').innerText = 'PAUSED BY HOST';
+            document.getElementById('timer').style.opacity = '0.5';
+        });
+
+        socket.on('timer_resumed', () => {
+            document.getElementById('timer').style.opacity = '1';
+        });
+
+        socket.on('answer_received', () => {
+            const connText = document.getElementById('connectionText');
+            connText.innerText = 'ANSWER RECEIVED ✅';
+            connText.style.color = '#52c41a';
+            document.getElementById('sendBtn').disabled = true;
+        });
+
+        socket.on('leaderboard_update', (leaderboard) => {
+            const myId = parseInt(document.getElementById('pId').value);
+            const myData = leaderboard.find(item => item.participantId === myId);
+            if (myData) {
+                document.getElementById('scoreDisplay').innerText = `Score: ${myData.score}`;
+            }
+        });
+
+        socket.on('error', (err) => {
+            alert('Server Error: ' + err.message);
+        });
+    }
+
+    function sendAnswer() {
+        const answerText = document.getElementById('answer').value;
+        if (!answerText) return alert('Answer cannot be empty!');
+
+        socket.emit('player:submit_answer', {
+            gameId: document.getElementById('gameId').value,
+            participantId: parseInt(document.getElementById('pId').value),
+            answer: answerText
+        });
+    }
+</script>
+</body>
+</html>

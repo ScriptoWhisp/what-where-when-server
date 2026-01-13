@@ -80,6 +80,10 @@ export class GameRepository {
     return this.prisma.game.findFirst({ where: { passcode } });
   }
 
+  async findById(id: number): Promise<Game | null> {
+    return this.prisma.game.findUnique({ where: { id } });
+  }
+
   async getHostGameDetails(params: {
     hostId: number;
     gameId: number;
@@ -365,5 +369,100 @@ export class GameRepository {
     });
 
     return mapHostGameDetails(full);
+  }
+
+  private async getStatusIdOrThrow(name: string): Promise<number> {
+    const status = await this.prisma.answerStatus.findFirst({
+      where: { name },
+    });
+
+    if (!status) {
+      throw new Error(
+        `Critical Error: Status "${name}" not found in database. Did you run the seed?`,
+      );
+    }
+
+    return status.id;
+  }
+
+  async activateQuestion(gameId: number, questionId: number) {
+    return this.prisma.$transaction([
+      this.prisma.question.updateMany({
+        where: { round: { gameId } },
+        data: { isActive: false },
+      }),
+      this.prisma.question.update({
+        where: { id: questionId },
+        data: { isActive: true },
+      }),
+    ]);
+  }
+
+  async saveAnswer(participantId: number, questionId: number, text: string) {
+    const statusId = await this.getStatusIdOrThrow('UNSET');
+    return this.prisma.answer.create({
+      data: {
+        gameParticipantId: participantId,
+        questionId: questionId,
+        answerText: text,
+        submittedAt: new Date(),
+        statusId: statusId,
+      },
+    });
+  }
+
+  async getAnswersByQuestion(questionId: number) {
+    return this.prisma.answer.findMany({
+      where: { questionId },
+      include: { participant: { include: { team: true } } },
+    });
+  }
+
+  async judgeAnswer(answerId: number, statusName: string, adminId: number) {
+    const newStatusId = await this.getStatusIdOrThrow(statusName);
+
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.answer.findUniqueOrThrow({
+        where: { id: answerId },
+      });
+      const updated = await tx.answer.update({
+        where: { id: answerId },
+        data: { statusId: newStatusId },
+      });
+      await tx.answerStatusHistory.create({
+        data: {
+          answerId: answerId,
+          oldStatusId: current.statusId,
+          newStatusId: newStatusId,
+          changedById: adminId,
+        },
+      });
+      return updated;
+    });
+  }
+
+  async getLeaderboard(gameId: number) {
+    const correctStatusId = await this.getStatusIdOrThrow('CORRECT');
+    const scores = await this.prisma.answer.groupBy({
+      by: ['gameParticipantId'],
+      where: {
+        statusId: correctStatusId,
+        participant: { gameId },
+      },
+      _count: { id: true },
+    });
+
+    const participants = await this.prisma.gameParticipant.findMany({
+      where: { gameId },
+      include: { team: true },
+    });
+
+    return participants
+      .map((p) => ({
+        participantId: p.id,
+        teamName: p.team.name,
+        score: scores.find((s) => s.gameParticipantId === p.id)?._count.id || 0,
+      }))
+      .sort((a, b) => b.score - a.score);
   }
 }

@@ -27,6 +27,8 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.11",
+    "@nestjs/platform-socket.io": "^11.1.11",
+    "@nestjs/websockets": "^11.1.11",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^6.19.1",
     "bcryptjs": "^3.0.3",
@@ -64,5 +66,8 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }
