@@ -10,7 +10,6 @@ import {
   SaveGameResponse,
 } from '../../../repository/contracts/game.dto';
 import {
-  generate4DigitPasscode,
   parseDateOfEvent,
 } from '../../../repository/utils/game.util';
 import { GameStatuses } from '../../../repository/contracts/common.dto';
@@ -34,13 +33,11 @@ export class HostService {
     date_of_event: string,
   ): Promise<HostGameGetResponse> {
     const date = parseDateOfEvent(date_of_event);
-    const code = generate4DigitPasscode();
 
-    const created = await this.games.createGame({
+    const created = await this.games.createGameWithAutoPasscode({
       hostId,
       name: title,
       date,
-      passcode: code,
       status: GameStatuses.DRAFT,
     });
 
