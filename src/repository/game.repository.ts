@@ -16,7 +16,12 @@ import {
   mapHostGameCard,
   mapHostGameDetails,
 } from './mappers/host-game.mapper';
-import { gameVersion, parseDateOfEvent } from './utils/game.util';
+import {
+  gameVersion,
+  generate4DigitPasscode,
+  parseDateOfEvent,
+} from './utils/game.util';
+import { GameStatuses } from './contracts/common.dto';
 
 export const gameDetailsInclude = Prisma.validator<Prisma.GameInclude>()({
   rounds: {
@@ -29,9 +34,49 @@ export const gameDetailsInclude = Prisma.validator<Prisma.GameInclude>()({
   participants: { include: { team: true, category: true } },
 });
 
+const GAME_CODE_LOCK = 424242;
+
 @Injectable()
 export class GameRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async allocateAvailablePasscode(
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${GAME_CODE_LOCK})`;
+
+    const activeStatuses = [GameStatuses.DRAFT, GameStatuses.LIVE];
+
+    const rows = await tx.game.findMany({
+      where: { status: { in: activeStatuses } },
+      select: { passcode: true },
+    });
+
+    const used = new Set<number>();
+    for (const r of rows) used.add(r.passcode);
+
+    if (used.size >= 9000) {
+      throw new ConflictException({
+        code: 'CONFLICT',
+        message: 'No passcodes available',
+      });
+    }
+
+    for (let i = 0; i < 64; i++) {
+      const candidate = generate4DigitPasscode();
+      if (!used.has(candidate)) return candidate;
+    }
+
+    for (let candidate = 1000; candidate <= 9999; candidate++) {
+      if (!used.has(candidate)) return candidate;
+    }
+
+    // Should be unreachable due to used.size check
+    throw new ConflictException({
+      code: 'CONFLICT',
+      message: 'No passcodes available',
+    });
+  }
 
   async listHostGames(params: {
     hostId: number;
@@ -57,27 +102,31 @@ export class GameRepository {
     };
   }
 
-  async createGame(params: {
+  async createGameWithAutoPasscode(params: {
     hostId: number;
     name: string;
     date: Date;
-    passcode: number;
     status: string;
   }): Promise<Game> {
-    return this.prisma.game.create({
-      data: {
-        hostId: params.hostId,
-        name: params.name,
-        date: params.date,
-        passcode: params.passcode,
-        status: params.status,
-        modifiedAt: new Date(),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const passcode = await this.allocateAvailablePasscode(tx);
+      return tx.game.create({
+        data: {
+          hostId: params.hostId,
+          name: params.name,
+          date: params.date,
+          passcode,
+          status: params.status,
+          modifiedAt: new Date(),
+        },
+      });
     });
   }
 
   async findByPasscode(passcode: number): Promise<Game | null> {
-    return this.prisma.game.findFirst({ where: { passcode } });
+    return this.prisma.game.findFirst({
+      where: { passcode, status: { not: GameStatuses.FINISHED } },
+    });
   }
 
   async getHostGameDetails(params: {
@@ -125,29 +174,12 @@ export class GameRepository {
       }
 
       const date = parseDateOfEvent(req.game.date_of_event);
-      const nextPasscode = existing.passcode;
-      if (Number.isNaN(nextPasscode)) {
-        throw new BadRequestException({
-          code: 'VALIDATION_ERROR',
-          message: 'Invalid passcode',
-        });
-      }
-      const passcodeOwner = await tx.game.findFirst({
-        where: { passcode: nextPasscode },
-      });
-      if (passcodeOwner && passcodeOwner.id !== existing.id) {
-        throw new ConflictException({
-          code: 'CONFLICT',
-          message: 'passcode already exists',
-        });
-      }
 
       await tx.game.update({
         where: { id: existing.id },
         data: {
           name: req.game.title,
           date,
-          passcode: nextPasscode,
           timeToThink: req.game.settings.time_to_think_sec,
           timeToAnswer: req.game.settings.time_to_answer_sec,
           timeToDisputeEnd: req.game.settings.time_to_dispute_end_min * 60,
@@ -349,19 +381,19 @@ export class GameRepository {
         }
       }
 
-      const row = await tx.game.findFirst({
+      const updated = await tx.game.findFirst({
         where: { id: existing.id, hostId },
         include: gameDetailsInclude,
       });
 
-      if (!row) {
+      if (!updated) {
         throw new NotFoundException({
           code: 'NOT_FOUND',
           message: 'Game not found after save',
         });
       }
 
-      return row;
+      return updated;
     });
 
     return mapHostGameDetails(full);
