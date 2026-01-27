@@ -52,6 +52,13 @@ Apply Prisma schema:
 npx prisma migrate dev
 ```
 
+Generate test data:
+
+```bash
+npx prisma db seed
+```
+
+
 ---
 
 ## Running the app
