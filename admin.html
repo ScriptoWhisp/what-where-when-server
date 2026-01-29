@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>WWW Admin Control Panel</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; background: #f0f2f5; line-height: 1.6; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); max-width: 500px; margin: auto; }
+        .input-group { margin-bottom: 15px; text-align: left; }
+        .input-group label { display: block; font-size: 14px; font-weight: bold; color: #555; margin-bottom: 5px; }
+        input, button { width: 100%; padding: 10px; margin: 5px 0; border-radius: 4px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: #1677ff; color: white; border: none; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button:hover { background: #4096ff; }
+        .timer { font-size: 64px; font-weight: bold; color: #1677ff; text-align: center; margin: 10px 0; }
+        .phase { font-size: 22px; color: #666; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
+        #logs { font-size: 13px; color: #666; background: #fafafa; padding: 10px; height: 120px; overflow-y: auto; border: 1px solid #eee; margin-top: 20px; border-radius: 4px; }
+        .timer-controls { display: flex; gap: 10px; margin-top: 10px; }
+        .timer-controls button { flex: 1; }
+        .disputed-card { border: 2px solid #faad14 !important; background: #fffbe6 !important; }
+    </style>
+</head>
+<body>
+<div class="card">
+    <h2>Admin Control Panel</h2>
+    <div class="input-group">
+        <label for="token">JWT Access Token</label>
+        <input type="text" id="token" placeholder="Paste your token here">
+    </div>
+    <div style="display: flex; gap: 15px;">
+        <div class="input-group" style="flex: 1;">
+            <label for="gameId">Game ID</label>
+            <input type="number" id="gameId" value="1">
+        </div>
+        <div class="input-group" style="flex: 1;">
+            <label for="questionId">Question ID</label>
+            <input type="number" id="questionId" value="10">
+        </div>
+    </div>
+    <button onclick="connect()">Connect to Server</button>
+    <button onclick="startQuestion()" style="background: #52c41a;">Start Question</button>
+    <hr>
+    <div class="phase" id="phase">Status: Offline</div>
+    <div class="timer" id="timer">00</div>
+    <div class="timer-controls">
+        <button onclick="adjustTime(10)" style="background: #fa8c16;">+10s</button>
+        <button onclick="adjustTime(-10)" style="background: #fa8c16;">-10s</button>
+        <button id="pauseBtn" onclick="togglePause()" style="background: #eb2f96;">Pause</button>
+    </div>
+    <div id="logs"><strong>Event Logs:</strong><br></div>
+    <hr>
+    <h3>Judging Area</h3>
+    <button onclick="loadAnswers()" style="background: #722ed1;">Load Answers</button>
+    <div id="answersList" style="margin-top: 15px;"></div>
+</div>
+
+<script>
+    let socket;
+    let isPaused = false;
+
+    function log(msg) {
+        const logDiv = document.getElementById('logs');
+        logDiv.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    function connect() {
+        const token = document.getElementById('token').value;
+        if (!token) return alert('Please enter a JWT token first!');
+        socket = io('http://localhost:3000/game', { auth: { token: token } });
+
+        socket.on('connect', () => {
+            log('Connected to WebSocket Server');
+            document.getElementById('phase').innerText = 'Status: Online';
+            socket.emit('join_room', { gameId: parseInt(document.getElementById('gameId').value) });
+        });
+
+        socket.on('timer_update', (data) => {
+            document.getElementById('timer').innerText = data.seconds;
+            document.getElementById('phase').innerText = `Phase: ${data.phase}`;
+        });
+
+        socket.on('sync_state', (state) => {
+            document.getElementById('timer').innerText = state.seconds;
+            document.getElementById('phase').innerText = `Phase: ${state.phase}`;
+            if (state.isPaused) {
+                isPaused = true;
+                document.getElementById('pauseBtn').innerText = 'Resume';
+            }
+        });
+
+        socket.on('admin:answers_list', (answers) => {
+            const container = document.getElementById('answersList');
+            container.innerHTML = '';
+            answers.forEach(ans => {
+                const isDisputed = ans.statusId === 4; // Обычно статус DISPUTABLE (проверь свой сид)
+                const div = document.createElement('div');
+                div.className = isDisputed ? 'disputed-card' : '';
+                div.style = "border: 1px solid #ddd; padding: 10px; margin-bottom: 5px; border-radius: 4px; background: #fff;";
+                div.innerHTML = `
+                    ${isDisputed ? '<b style="color: #faad14;">⚠️ DISPUTE FILED</b><br>' : ''}
+                    <strong>Team: ${ans.participant.team.name}</strong><br>
+                    Answer: <span style="color: blue;">${ans.answerText}</span><br><br>
+                    <button onclick="judge(${ans.id}, 'CORRECT')" style="width: auto; background: #52c41a; padding: 5px 15px;">OK</button>
+                    <button onclick="judge(${ans.id}, 'INCORRECT')" style="width: auto; background: #ff4d4f; padding: 5px 15px;">WRONG</button>
+                `;
+                container.appendChild(div);
+            });
+        });
+
+        socket.on('admin:new_dispute', (data) => {
+            log(`⚠️ DISPUTE: Answer #${data.answerId} has been appealed!`);
+            loadAnswers(); // Авто-обновление списка
+        });
+
+        socket.on('leaderboard_update', (scores) => log("Leaderboard Updated"));
+        socket.on('timer_paused', () => { isPaused = true; document.getElementById('pauseBtn').innerText = 'Resume'; });
+        socket.on('timer_resumed', () => { isPaused = false; document.getElementById('pauseBtn').innerText = 'Pause'; });
+    }
+
+    function togglePause() {
+        const gId = parseInt(document.getElementById('gameId').value);
+        socket.emit(isPaused ? 'admin:resume_timer' : 'admin:pause_timer', { gameId: gId });
+    }
+
+    function adjustTime(delta) {
+        socket.emit('admin:adjust_time', { gameId: parseInt(document.getElementById('gameId').value), delta });
+    }
+
+    function startQuestion() {
+        socket.emit('admin:start_question', {
+            gameId: parseInt(document.getElementById('gameId').value),
+            questionId: parseInt(document.getElementById('questionId').value)
+        });
+    }
+
+    function loadAnswers() {
+        const qId = parseInt(document.getElementById('questionId').value);
+        const gId = parseInt(document.getElementById('gameId').value);
+        socket.emit('admin:get_answers', { gameId: gId, questionId: qId });
+    }
+
+    function judge(answerId, verdict) {
+        socket.emit('admin:judge_answer', {
+            gameId: parseInt(document.getElementById('gameId').value),
+            answerId, verdict
+        });
+    }
+</script>
+</body>
+</html>
