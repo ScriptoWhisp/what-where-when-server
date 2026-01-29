@@ -41,6 +41,8 @@ jobs:
 
       - run: npm ci --no-audit --prefer-offline
 
+      - run: npx prisma generate
+
       - run: npm run test:unit
 
   e2e:

@@ -1,4 +1,17 @@
+import { Prisma } from '@prisma/client';
 import type { ID, ISODateTime, GameStatus, Pagination } from './common.dto';
+
+export const gameDetailsInclude = Prisma.validator<Prisma.GameInclude>()({
+  rounds: {
+    orderBy: { roundNumber: 'asc' },
+    include: {
+      questions: { orderBy: { questionNumber: 'asc' } },
+    },
+  },
+  categoryLinks: { include: { category: true } },
+  participants: { include: { team: true, category: true } },
+});
+
 
 export interface GameSettings {
   time_to_think_sec: number;

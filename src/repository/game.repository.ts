@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import { Prisma, type Game } from '@prisma/client';
 import { PrismaService } from './prisma/prisma.service';
-import type {
+import {
+  gameDetailsInclude,
   HostGameCard,
   HostGameDetails,
   HostGamesListResponse,
@@ -17,17 +18,6 @@ import {
   mapHostGameDetails,
 } from './mappers/host-game.mapper';
 import { gameVersion, parseDateOfEvent } from './utils/game.util';
-
-export const gameDetailsInclude = Prisma.validator<Prisma.GameInclude>()({
-  rounds: {
-    orderBy: { roundNumber: 'asc' },
-    include: {
-      questions: { orderBy: { questionNumber: 'asc' } },
-    },
-  },
-  categoryLinks: { include: { category: true } },
-  participants: { include: { team: true, category: true } },
-});
 
 @Injectable()
 export class GameRepository {
