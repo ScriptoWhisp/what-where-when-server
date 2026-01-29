@@ -441,6 +441,28 @@ export class GameRepository {
     });
   }
 
+  async createDispute(answerId: number, comment: string) {
+    const disputableStatusId = await this.getStatusIdOrThrow('DISPUTABLE');
+    const openStatus = await this.prisma.disputeStatus.findFirst({
+      where: { name: 'OPEN' },
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      await tx.answer.update({
+        where: { id: Number(answerId) },
+        data: { statusId: disputableStatusId },
+      });
+
+      return tx.dispute.create({
+        data: {
+          answerId: Number(answerId),
+          statusId: openStatus!.id,
+          comment: comment,
+        },
+      });
+    });
+  }
+
   async getLeaderboard(gameId: number) {
     const correctStatusId = await this.getStatusIdOrThrow('CORRECT');
     const scores = await this.prisma.answer.groupBy({

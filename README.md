@@ -87,6 +87,7 @@ npm run test:unit
 
 ```bash
 docker compose -f docker-compose.test.yml up -d
+npm run db:test:push
 npm run test:e2e
 ```
 

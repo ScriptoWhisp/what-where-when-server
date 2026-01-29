@@ -6,6 +6,7 @@ const prisma = new PrismaClient();
 
 async function clearDatabase() {
   console.log('Cleaning up database...');
+  await prisma.dispute.deleteMany();
   await prisma.answerStatusHistory.deleteMany();
   await prisma.answer.deleteMany();
   await prisma.question.deleteMany();
