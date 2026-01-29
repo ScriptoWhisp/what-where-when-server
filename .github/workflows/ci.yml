@@ -31,6 +31,8 @@ jobs:
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/unused
     steps:
       - uses: actions/checkout@v4
 
