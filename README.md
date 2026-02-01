@@ -52,6 +52,13 @@ Apply Prisma schema:
 npx prisma migrate dev
 ```
 
+Generate test data:
+
+```bash
+npx prisma db seed
+```
+
+
 ---
 
 ## Running the app
@@ -80,6 +87,7 @@ npm run test:unit
 
 ```bash
 docker compose -f docker-compose.test.yml up -d
+npm run db:test:push
 npm run test:e2e
 ```
 

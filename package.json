@@ -15,6 +15,7 @@
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest -c jest.config.js",
     "test:unit": "jest -c jest.unit.config.js",
+    "db:test:push": "cross-env DATABASE_URL=postgresql://www:www@localhost:5434/www_test?schema=public npx prisma db push",
     "test:e2e": "jest -c jest.e2e.config.js",
     "test:cov": "jest -c jest.unit.config.js --coverage",
     "test:watch": "jest -c jest.unit.config.js --watch",
@@ -27,6 +28,8 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.11",
+    "@nestjs/platform-socket.io": "^11.1.11",
+    "@nestjs/websockets": "^11.1.11",
     "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "^6.19.1",
     "bcryptjs": "^3.0.3",
@@ -64,5 +67,8 @@
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }
