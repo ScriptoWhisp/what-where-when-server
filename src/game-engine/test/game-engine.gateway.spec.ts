@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { GameEngineGateway } from './game-engine.gateway';
-import { GameEngineService } from './game-engine.service';
-import { GameRepository } from '../repository/game.repository';
 import { JwtService } from '@nestjs/jwt';
 import { Socket, Server } from 'socket.io';
-import { GamePhase } from './dto/game-engine.dto';
+import { GameEngineGateway } from '../game-engine.gateway';
+import { GameEngineService } from '../game-engine.service';
+import { GamePhase } from '../../repository/contracts/game-engine.dto';
+import { GameRepository } from '../../repository/game.repository';
 
 describe('GameEngineGateway', () => {
   let gateway: GameEngineGateway;
@@ -20,6 +20,9 @@ describe('GameEngineGateway', () => {
     pauseTimer: jest.fn(),
     resumeTimer: jest.fn(),
     adjustTime: jest.fn(),
+    joinGame: jest.fn(),
+    getGameStateAndJoinGame: jest.fn(),
+    teamJoinGame: jest.fn(),
   };
 
   const mockRepo = {
@@ -62,13 +65,23 @@ describe('GameEngineGateway', () => {
 
   describe('Connection', () => {
     it('should join room and sync state', async () => {
-      await gateway.handleJoin(mockSocket, { gameId: 10 });
-      expect(mockSocket.join).toHaveBeenCalledWith('game_10');
-      expect(service.getGameState).toHaveBeenCalledWith(10);
-      expect(mockSocket.emit).toHaveBeenCalledWith(
-        'sync_state',
-        expect.any(Object),
+      const mockState = { phase: GamePhase.IDLE, seconds: 0, isPaused: false };
+
+      (mockService.getGameStateAndJoinGame as jest.Mock).mockResolvedValue(
+        mockState,
       );
+
+      await gateway.handleJoin(mockSocket, { gameId: 10, teamId: 1 });
+
+      expect(mockSocket.join).toHaveBeenCalledWith('game_10');
+
+      expect(service.getGameStateAndJoinGame).toHaveBeenCalledWith(
+        10,
+        1,
+        'socket_1',
+      );
+
+      expect(mockSocket.emit).toHaveBeenCalledWith('sync_state', mockState);
     });
   });
 

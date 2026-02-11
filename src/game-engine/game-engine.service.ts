@@ -33,13 +33,21 @@ export class GameEngineService {
     teamId: number,
     socketId: string,
   ): Promise<GameState> {
-    const game = await this.gameRepository.teamJoinGame(gameId, teamId, socketId);
+    const game = await this.gameRepository.teamJoinGame(
+      gameId,
+      teamId,
+      socketId,
+    );
+    return this.getGameState(game.gameId);
+  }
+
+  public getGameState(gameId: number): GameState {
     return {
-      phase: this.getPhase(game.gameId),
-      seconds: this.remainingSeconds.get(game.gameId) ?? 0,
+      phase: this.getPhase(gameId),
+      seconds: this.remainingSeconds.get(gameId) ?? 0,
       isPaused:
-        !this.activeTimers.has(game.gameId) &&
-        this.getPhase(game.gameId) !== GamePhase.IDLE,
+        !this.activeTimers.has(gameId) &&
+        this.getPhase(gameId) !== GamePhase.IDLE,
     };
   }
 

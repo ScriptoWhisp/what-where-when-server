@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { GameEngineService } from './game-engine.service';
-import { GameRepository } from '../repository/game.repository';
-import { GamePhase } from './dto/game-engine.dto';
+import { GameEngineService } from '../game-engine.service';
+import { GameRepository } from '../../repository/game.repository';
+import { GamePhase } from '../../repository/contracts/game-engine.dto';
 
 describe('GameEngineService', () => {
   let service: GameEngineService;
@@ -11,6 +11,7 @@ describe('GameEngineService', () => {
     activateQuestion: jest.fn(),
     saveAnswer: jest.fn(),
     findById: jest.fn(),
+    teamJoinGame: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -40,6 +41,24 @@ describe('GameEngineService', () => {
     jest.clearAllTimers();
   });
 
+  describe('Join Logic', () => {
+    it('should call repo.teamJoinGame with correct args', async () => {
+      const gameId = 100;
+      const teamId = 50;
+      const socketId = 's_123';
+
+      (mockRepository.teamJoinGame as jest.Mock).mockResolvedValue({
+        id: 1,
+        teamId: teamId,
+        gameId: gameId,
+      });
+
+      await service.getGameStateAndJoinGame(gameId, teamId, socketId);
+
+      expect(repository.teamJoinGame).toHaveBeenCalledWith(gameId, teamId, socketId);
+    });
+  });
+
   describe('Host Validation', () => {
     it('should return true if user is the host', async () => {
       (mockRepository.findById as jest.Mock).mockResolvedValue({ hostId: 10 });
@@ -65,13 +84,13 @@ describe('GameEngineService', () => {
       await service.startQuestionCycle(gameId, 100, onTick, onPhaseChange);
 
       expect(repository.activateQuestion).toHaveBeenCalledWith(gameId, 100);
-      expect(service.getPhase('1')).toBe(GamePhase.THINKING);
+      expect(service.getPhase(1)).toBe(GamePhase.THINKING);
 
       jest.advanceTimersByTime(60000);
-      expect(service.getPhase('1')).toBe(GamePhase.ANSWERING);
+      expect(service.getPhase(1)).toBe(GamePhase.ANSWERING);
 
       jest.advanceTimersByTime(10000);
-      expect(service.getPhase('1')).toBe(GamePhase.IDLE);
+      expect(service.getPhase(1)).toBe(GamePhase.IDLE);
     });
 
     it('should throw error if database activation fails', async () => {
@@ -118,7 +137,7 @@ describe('GameEngineService', () => {
 
       await service.adjustTime(1, -70);
 
-      expect(service.getPhase('1')).toBe(GamePhase.ANSWERING);
+      expect(service.getPhase(1)).toBe(GamePhase.ANSWERING);
       expect(service.getGameState(1).seconds).toBe(10);
     });
 
