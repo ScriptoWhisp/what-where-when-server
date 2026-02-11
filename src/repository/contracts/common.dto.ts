@@ -1,4 +1,4 @@
-export type ID = number;
+export type GameId = number;
 export type ISODateTime = string;
 
 export interface Pagination {

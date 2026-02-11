@@ -108,6 +108,7 @@ model GameParticipant {
   gameId      Int      @map("game_id")
   categoryId  Int      @map("category_id")
   isAvailable Boolean  @default(true) @map("is_available")
+  socketId    String?
   createdAt   DateTime @default(now()) @map("created_at")
 
   team     Team     @relation(fields: [teamId], references: [id])
@@ -116,6 +117,7 @@ model GameParticipant {
 
   answers Answer[]
 
+  @@unique([gameId, teamId])
   @@map("game_participants")
 }
 
