@@ -98,6 +98,7 @@ export function mapHostGameDetails(game: GameDetailsLike): HostGameDetails {
 
     teams: uniqueTeams(game.participants).map((t) => ({
       id: t.id,
+      manager_id: t.managerId,
       name: t.name,
       team_code: t.teamCode,
       created_at: t.createdAt.toISOString(),
