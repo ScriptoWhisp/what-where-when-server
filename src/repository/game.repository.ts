@@ -16,6 +16,7 @@ import {
 import {
   mapHostGameCard,
   mapHostGameDetails,
+  PlayerMapper,
 } from './mappers/host-game.mapper';
 import {
   gameVersion,
@@ -23,12 +24,72 @@ import {
   parseDateOfEvent,
 } from './utils/game.util';
 import { GameStatuses } from './contracts/common.dto';
+import { CheckGameResponse } from '../game-client-player/main/player.controller';
+import { ParticipantDomain } from './contracts/game-engine.dto';
 
 const GAME_CODE_LOCK = 424242;
 
 @Injectable()
 export class GameRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  async findGameByPasscodeWithTeams(
+    passcode: number,
+  ): Promise<CheckGameResponse | null> {
+    const game = await this.prisma.game.findFirst({
+      where: {
+        passcode,
+        status: { not: GameStatuses.FINISHED },
+      },
+      include: {
+        participants: {
+          include: {
+            team: true,
+          },
+        },
+      },
+    });
+
+    if (!game) return null; // Add client error later
+
+    return {
+      gameId: game.id,
+      gameName: game.name,
+      teams: game.participants.map((p) => ({
+        teamId: p.teamId,
+        name: p.team.name,
+        isAvailable: p.isAvailable,
+      })),
+    };
+  }
+
+  async teamJoinGame(
+    gameId: number,
+    teamId: number,
+    socketId: string,
+  ): Promise<ParticipantDomain> {
+    const rawResult = await this.prisma.gameParticipant.update({
+      where: {
+        gameId_teamId: { gameId, teamId },
+      },
+      data: {
+        isAvailable: false,
+        socketId: socketId
+      },
+      include: {
+        team: true,
+      },
+    });
+
+    return PlayerMapper.toParticipantDomain(rawResult);
+  }
+
+  async setParticipantDisconnected(socketId: string): Promise<void> {
+    await this.prisma.gameParticipant.updateMany({
+      where: { socketId },
+      data: { isAvailable: true, socketId: null },
+    });
+  }
 
   private async allocateAvailablePasscode(
     tx: Prisma.TransactionClient,

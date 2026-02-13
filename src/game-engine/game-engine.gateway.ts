@@ -6,23 +6,24 @@ import {
   MessageBody,
   ConnectedSocket,
   WsException,
+  OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { GameEngineService } from './game-engine.service';
 import { WsJwtGuard } from './guards/ws-jwt.guard';
 import { GameRepository } from '../repository/game.repository';
-import {
-  JoinRoomDto,
+import type {
+  AdjustTimeDto,
+  DisputeDto,
+  GetAnswersDto,
+  JoinGameDto,
+  JudgeAnswerDto,
   StartQuestionDto,
   SubmitAnswerDto,
-  DisputeDto,
-  AdjustTimeDto,
-  GetAnswersDto,
-  JudgeAnswerDto,
-} from './dto/game-engine.dto';
+} from '../repository/contracts/game-engine.dto';
 
 @WebSocketGateway({ cors: { origin: '*' }, namespace: 'game' })
-export class GameEngineGateway {
+export class GameEngineGateway implements OnGatewayDisconnect {
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(GameEngineGateway.name);
 
@@ -31,18 +32,29 @@ export class GameEngineGateway {
     private readonly gameRepository: GameRepository,
   ) {}
 
-  @SubscribeMessage('join_room')
+  async handleDisconnect(client: Socket) {
+    await this.gameRepository.setParticipantDisconnected(client.id);
+    this.logger.log(`Client disconnected: ${client.id}`);
+  }
+
+  @SubscribeMessage('join_game')
   async handleJoin(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: JoinRoomDto,
+    @MessageBody() data: JoinGameDto,
   ) {
-    const gId = Number(data.gameId);
-    client.join(`game_${gId}`);
+    const gameId = data.gameId;
+    const teamId = data.teamId;
 
-    const state = this.gameService.getGameState(gId);
+    if (!gameId || !teamId) {
+      client.emit('error', { message: 'Invalid gameId or teamId' });
+      return;
+    }
+    client.join(`game_${gameId}`);
+
+    const state = await this.gameService.getGameStateAndJoinGame(gameId, teamId, client.id);
     client.emit('sync_state', state);
 
-    this.logger.log(`Client ${client.id} joined game_${gId}`);
+    this.logger.log(`Client ${client.id} joined game_${gameId}`);
   }
 
   @UseGuards(WsJwtGuard)
@@ -167,7 +179,6 @@ export class GameEngineGateway {
     await this.ensureAdmin(data.gameId, client);
     await this.gameService.adjustTime(data.gameId, data.delta);
   }
-
 
   private async ensureAdmin(gameId: number, client: Socket) {
     const userId = client['user']?.sub;

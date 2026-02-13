@@ -1,4 +1,4 @@
-import type { Category, GameParticipant, Team } from '@prisma/client';
+import type { Category, Game, GameParticipant, Team } from '@prisma/client';
 import type { HostGameCard, HostGameDetails } from '../contracts/game.dto';
 import { coerceGameStatus } from '../types/guards';
 import {
@@ -6,6 +6,11 @@ import {
   gameUpdatedAt,
   gameVersion,
 } from '../utils/game.util';
+import {
+  GamePublicDomain,
+  ParticipantDomain,
+} from '../contracts/game-engine.dto';
+
 
 export type GameListLike = {
   id: number;
@@ -116,4 +121,37 @@ export function mapHostGameDetails(game: GameDetailsLike): HostGameDetails {
     updated_at: updatedAt.toISOString(),
     version: gameVersion(game),
   };
+}
+
+export class PlayerMapper {
+  static toParticipantDomain(
+    data: GameParticipant & { team: Team },
+  ): ParticipantDomain {
+    return {
+      id: data.id,
+      gameId: data.gameId,
+      teamId: data.teamId,
+      isConnected: !data.isAvailable,
+      socketId: data.socketId,
+      teamName: data.team.name,
+    };
+  }
+
+  static toGamePublicDomain(
+    game: Game & { teams: Team[] },
+    participants: GameParticipant[],
+  ): GamePublicDomain {
+    return {
+      id: game.id,
+      name: game.name,
+      teams: game.teams.map((team) => {
+        const participant = participants.find((p) => p.teamId === team.id);
+        return {
+          id: team.id,
+          name: team.name,
+          isTaken: !participant?.isAvailable,
+        };
+      }),
+    };
+  }
 }

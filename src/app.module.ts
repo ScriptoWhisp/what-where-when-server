@@ -5,9 +5,16 @@ import { AppConfigModule } from './config/app-config.module';
 import { PrismaModule } from './repository/prisma/prisma.module';
 import { HostModule } from './game-client-admin/main/host.module';
 import { GameEngineModule } from './game-engine/game-engine.module';
+import { PlayerModule } from './game-client-player/main/player.module';
 
 @Module({
-  imports: [AppConfigModule, PrismaModule, HostModule, GameEngineModule],
+  imports: [
+    AppConfigModule,
+    PrismaModule,
+    HostModule,
+    GameEngineModule,
+    PlayerModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

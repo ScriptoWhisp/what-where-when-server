@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import type { ID, ISODateTime, GameStatus, Pagination } from './common.dto';
+import type { GameId, ISODateTime, GameStatus, Pagination } from './common.dto';
 
 export const gameDetailsInclude = Prisma.validator<Prisma.GameInclude>()({
   rounds: {
@@ -25,21 +25,21 @@ export interface GameSettings {
 }
 
 export interface GameCategory {
-  id?: ID;
+  id?: GameId;
   name: string;
   description?: string;
 }
 
 export interface GameTeam {
-  id?: ID;
+  id?: GameId;
   name: string;
   team_code: string;
   created_at?: ISODateTime;
 }
 
 export interface GameQuestion {
-  id?: ID;
-  round_id?: ID;
+  id?: GameId;
+  round_id?: GameId;
   question_number: number;
   text: string;
   answer: string;
@@ -48,14 +48,14 @@ export interface GameQuestion {
 }
 
 export interface GameRound {
-  id?: ID;
+  id?: GameId;
   round_number: number;
   name?: string;
   questions: GameQuestion[];
 }
 
 export interface HostGameDetails {
-  id: ID;
+  id: GameId;
   title: string;
   date_of_event: string;
   status: GameStatus;
@@ -74,7 +74,7 @@ export interface HostGameDetails {
 }
 
 export interface HostGameCard {
-  id: ID;
+  id: GameId;
   title: string;
   subtitle: string;
 }
@@ -94,17 +94,17 @@ export interface HostGameGetResponse {
 }
 
 export interface SaveGameRequest {
-  game_id: ID;
+  game_id: GameId;
   version: number;
   game: Omit<
     HostGameDetails,
     'id' | 'updated_at' | 'version' | 'status' | 'passcode'
   >
 
-  deleted_round_ids?: ID[];
-  deleted_question_ids?: ID[];
-  deleted_team_ids?: ID[];
-  deleted_category_ids?: ID[];
+  deleted_round_ids?: GameId[];
+  deleted_question_ids?: GameId[];
+  deleted_team_ids?: GameId[];
+  deleted_category_ids?: GameId[];
 }
 
 export interface SaveGameResponse {
