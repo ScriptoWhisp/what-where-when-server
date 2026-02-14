@@ -25,21 +25,22 @@ export interface GameSettings {
 }
 
 export interface GameCategory {
-  id?: GameId;
+  id?: number;
   name: string;
   description?: string;
 }
 
 export interface GameTeam {
-  id?: GameId;
+  id?: number;
   name: string;
   team_code: string;
+  manager_id: number;
   created_at?: ISODateTime;
 }
 
 export interface GameQuestion {
-  id?: GameId;
-  round_id?: GameId;
+  id?: number;
+  round_id?: number;
   question_number: number;
   text: string;
   answer: string;
@@ -48,7 +49,7 @@ export interface GameQuestion {
 }
 
 export interface GameRound {
-  id?: GameId;
+  id?: number;
   round_number: number;
   name?: string;
   questions: GameQuestion[];

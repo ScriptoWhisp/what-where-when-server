@@ -161,7 +161,7 @@ export class GameRepository {
   }): Promise<Game> {
     return this.prisma.$transaction(async (tx) => {
       const passcode = await this.allocateAvailablePasscode(tx);
-      return tx.game.create({
+      const game = await tx.game.create({
         data: {
           hostId: params.hostId,
           name: params.name,
@@ -171,6 +171,35 @@ export class GameRepository {
           modifiedAt: new Date(),
         },
       });
+
+      const ownedCategories = await tx.category.findMany({
+        where: { userId: params.hostId },
+      });
+      for (const category of ownedCategories) {
+        await tx.categoryGameRelation.upsert({
+          where: {
+            categoryId_gameId: { categoryId: category.id, gameId: game.id },
+          },
+          create: { categoryId: category.id, gameId: game.id },
+          update: {},
+        });
+      }
+
+      const ownedTeams = await tx.team.findMany({
+        where: { managerId: params.hostId },
+      });
+      for (const team of ownedTeams) {
+        await tx.gameParticipant.create({
+          data: {
+            gameId: game.id,
+            teamId: team.id,
+            categoryId: ownedCategories[0].id,
+            isAvailable: true,
+          },
+        });
+      }
+
+      return game;
     });
   }
 
@@ -348,7 +377,7 @@ export class GameRepository {
           teamId = updated.id;
         } else {
           const created = await tx.team.create({
-            data: { name: t.name, teamCode: t.team_code },
+            data: { name: t.name, teamCode: t.team_code, managerId: hostId },
           });
           teamId = created.id;
         }

@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,64 +8,57 @@ datasource db {
 }
 
 model Role {
-  id   Int    @id @default(autoincrement())
-  name String
-
+  id    Int    @id @default(autoincrement())
+  name  String
   users User[]
 
   @@map("roles")
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  password  String
-  roleId    Int      @map("role")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  role                  Role                  @relation(fields: [roleId], references: [id])
-  games                 Game[]                @relation("HostGames")
-  categories            Category[]
+  id                    Int                   @id @default(autoincrement())
+  email                 String                @unique
+  password              String
+  roleId                Int                   @map("role")
+  createdAt             DateTime              @default(now()) @map("created_at")
   answerStatusHistories AnswerStatusHistory[]
+  categories            Category[]
+  games                 Game[]                @relation("HostGames")
+  teams                 Team[]
+  role                  Role                  @relation(fields: [roleId], references: [id])
 
   @@map("users")
 }
 
 model Game {
-  id       Int      @id @default(autoincrement())
-  hostId   Int      @map("host")
-  name     String
-  passcode Int
-  status   String
-  date     DateTime
-
-  timeToThink      Int @default(60) @map("time_to_think")
-  timeToAnswer     Int @default(10) @map("time_to_answer")
-  timeToDisputeEnd Int @default(600) @map("time_to_dispute_end")
-
-  showQuestions   Boolean @default(false) @map("show_questions")
-  showAnswer      Boolean @default(false) @map("show_answer")
-  showLeaderboard Boolean @default(true) @map("show_leaderboard")
-  canAppeal       Boolean @default(true) @map("can_appeal")
-
-  createdAt  DateTime @default(now()) @map("created_at")
-  modifiedAt DateTime @default(now()) @map("modified_at")
-
-  host User @relation("HostGames", fields: [hostId], references: [id])
-
-  rounds        Round[]
-  participants  GameParticipant[]
-  categoryLinks CategoryGameRelation[]
+  id               Int                    @id @default(autoincrement())
+  hostId           Int                    @map("host")
+  name             String
+  passcode         Int
+  status           String
+  date             DateTime
+  timeToThink      Int                    @default(60) @map("time_to_think")
+  timeToAnswer     Int                    @default(10) @map("time_to_answer")
+  timeToDisputeEnd Int                    @default(600) @map("time_to_dispute_end")
+  showQuestions    Boolean                @default(false) @map("show_questions")
+  showAnswer       Boolean                @default(false) @map("show_answer")
+  showLeaderboard  Boolean                @default(true) @map("show_leaderboard")
+  canAppeal        Boolean                @default(true) @map("can_appeal")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  modifiedAt       DateTime               @default(now()) @map("modified_at")
+  categoryLinks    CategoryGameRelation[]
+  participants     GameParticipant[]
+  host             User                   @relation("HostGames", fields: [hostId], references: [id])
+  rounds           Round[]
 
   @@map("games")
 }
 
 model Category {
-  id          Int     @id @default(autoincrement())
-  userId      Int     @map("user_id")
-  name        String
-  description String?
-
+  id           Int                    @id @default(autoincrement())
+  userId       Int                    @map("user_id")
+  name         String
+  description  String?
   user         User                   @relation(fields: [userId], references: [id])
   gameLinks    CategoryGameRelation[]
   participants GameParticipant[]
@@ -80,24 +67,24 @@ model Category {
 }
 
 model CategoryGameRelation {
-  id         Int @id @default(autoincrement())
-  categoryId Int @map("category_id")
-  gameId     Int @map("game_id")
-
-  category Category @relation(fields: [categoryId], references: [id])
-  game     Game     @relation(fields: [gameId], references: [id])
+  id         Int      @id @default(autoincrement())
+  categoryId Int      @map("category_id")
+  gameId     Int      @map("game_id")
+  category   Category @relation(fields: [categoryId], references: [id])
+  game       Game     @relation(fields: [gameId], references: [id])
 
   @@unique([categoryId, gameId])
   @@map("category_game_relations")
 }
 
 model Team {
-  id        Int      @id @default(autoincrement())
-  teamCode  String   @unique @map("team_code")
-  name      String
-  createdAt DateTime @default(now()) @map("created_at")
-
+  id           Int               @id @default(autoincrement())
+  teamCode     String            @map("team_code")
+  name         String
+  createdAt    DateTime          @default(now()) @map("created_at")
+  managerId    Int               @map("manager_id")
   participants GameParticipant[]
+  users        User              @relation(fields: [managerId], references: [id])
 
   @@map("teams")
 }
@@ -108,113 +95,103 @@ model GameParticipant {
   gameId      Int      @map("game_id")
   categoryId  Int      @map("category_id")
   isAvailable Boolean  @default(true) @map("is_available")
-  socketId    String?
   createdAt   DateTime @default(now()) @map("created_at")
-
-  team     Team     @relation(fields: [teamId], references: [id])
-  game     Game     @relation(fields: [gameId], references: [id])
-  category Category @relation(fields: [categoryId], references: [id])
-
-  answers Answer[]
+  socketId    String?
+  answers     Answer[]
+  category    Category @relation(fields: [categoryId], references: [id])
+  game        Game     @relation(fields: [gameId], references: [id])
+  team        Team     @relation(fields: [teamId], references: [id])
 
   @@unique([gameId, teamId])
   @@map("game_participants")
 }
 
 model Round {
-  id          Int     @id @default(autoincrement())
-  gameId      Int     @map("game_id")
-  roundNumber Int     @map("round_number")
+  id          Int        @id @default(autoincrement())
+  gameId      Int        @map("game_id")
+  roundNumber Int        @map("round_number")
   name        String?
-
-  game      Game       @relation(fields: [gameId], references: [id])
-  questions Question[]
+  questions   Question[]
+  game        Game       @relation(fields: [gameId], references: [id])
 
   @@unique([gameId, roundNumber])
   @@map("rounds")
 }
 
 model Question {
-  id             Int     @id @default(autoincrement())
-  roundId        Int     @map("round_id")
+  id             Int      @id @default(autoincrement())
+  roundId        Int      @map("round_id")
   text           String
   answer         String
-  questionNumber Int     @map("question_number")
-  timeToThink    Int     @map("time_to_think")
-  timeToAnswer   Int     @map("time_to_answer")
-  isActive       Boolean @default(false) @map("is_active")
-
-  round   Round    @relation(fields: [roundId], references: [id])
-  answers Answer[]
+  questionNumber Int      @map("question_number")
+  timeToThink    Int      @map("time_to_think")
+  timeToAnswer   Int      @map("time_to_answer")
+  isActive       Boolean  @default(false) @map("is_active")
+  answers        Answer[]
+  round          Round    @relation(fields: [roundId], references: [id])
 
   @@unique([roundId, questionNumber])
   @@map("questions")
 }
 
 model AnswerStatus {
-  id   Int    @id @default(autoincrement())
-  name String
-
-  answers    Answer[]
-  oldHistory AnswerStatusHistory[] @relation("OldStatus")
+  id         Int                   @id @default(autoincrement())
+  name       String
   newHistory AnswerStatusHistory[] @relation("NewStatus")
+  oldHistory AnswerStatusHistory[] @relation("OldStatus")
+  answers    Answer[]
 
   @@map("answer_statuses")
 }
 
 model Answer {
-  id                Int      @id @default(autoincrement())
-  gameParticipantId Int      @map("game_participant_id")
-  questionId        Int      @map("question_id")
-  answerText        String   @map("answer_text")
-  submittedAt       DateTime @map("submitted_at")
-  statusId          Int      @map("status")
-
-  participant GameParticipant @relation(fields: [gameParticipantId], references: [id])
-  question    Question        @relation(fields: [questionId], references: [id])
-  status      AnswerStatus    @relation(fields: [statusId], references: [id])
-
-  disputes      Dispute[]
-  statusHistory AnswerStatusHistory[]
+  id                Int                   @id @default(autoincrement())
+  gameParticipantId Int                   @map("game_participant_id")
+  questionId        Int                   @map("question_id")
+  answerText        String                @map("answer_text")
+  submittedAt       DateTime              @map("submitted_at")
+  statusId          Int                   @map("status")
+  statusHistory     AnswerStatusHistory[]
+  participant       GameParticipant       @relation(fields: [gameParticipantId], references: [id])
+  question          Question              @relation(fields: [questionId], references: [id])
+  status            AnswerStatus          @relation(fields: [statusId], references: [id])
+  disputes          Dispute[]
 
   @@unique([gameParticipantId, questionId])
   @@map("answers")
 }
 
 model AnswerStatusHistory {
-  id          Int      @id @default(autoincrement())
-  answerId    Int      @map("answer_id")
-  oldStatusId Int      @map("old_status_id")
-  newStatusId Int      @map("new_status_id")
-  changedById Int      @map("changed_by")
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  answer    Answer       @relation(fields: [answerId], references: [id])
-  oldStatus AnswerStatus @relation("OldStatus", fields: [oldStatusId], references: [id])
-  newStatus AnswerStatus @relation("NewStatus", fields: [newStatusId], references: [id])
-  changedBy User         @relation(fields: [changedById], references: [id])
+  id          Int          @id @default(autoincrement())
+  answerId    Int          @map("answer_id")
+  oldStatusId Int          @map("old_status_id")
+  newStatusId Int          @map("new_status_id")
+  changedById Int          @map("changed_by")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  answer      Answer       @relation(fields: [answerId], references: [id])
+  changedBy   User         @relation(fields: [changedById], references: [id])
+  newStatus   AnswerStatus @relation("NewStatus", fields: [newStatusId], references: [id])
+  oldStatus   AnswerStatus @relation("OldStatus", fields: [oldStatusId], references: [id])
 
   @@map("answer_status_history")
 }
 
 model DisputeStatus {
-  id   Int    @id @default(autoincrement())
-  name String
-
+  id       Int       @id @default(autoincrement())
+  name     String
   disputes Dispute[]
 
   @@map("dispute_statuses")
 }
 
 model Dispute {
-  id        Int      @id @default(autoincrement())
-  answerId  Int      @map("answer_id")
+  id        Int           @id @default(autoincrement())
+  answerId  Int           @map("answer_id")
   comment   String
-  statusId  Int      @map("status")
-  createdAt DateTime @default(now()) @map("created_at")
-
-  answer Answer        @relation(fields: [answerId], references: [id])
-  status DisputeStatus @relation(fields: [statusId], references: [id])
+  statusId  Int           @map("status")
+  createdAt DateTime      @default(now()) @map("created_at")
+  answer    Answer        @relation(fields: [answerId], references: [id])
+  status    DisputeStatus @relation(fields: [statusId], references: [id])
 
   @@map("disputes")
 }

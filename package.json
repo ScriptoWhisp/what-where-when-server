@@ -15,11 +15,14 @@
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest -c jest.config.js",
     "test:unit": "jest -c jest.unit.config.js",
-    "db:test:push": "cross-env DATABASE_URL=postgresql://www:www@localhost:5434/www_test?schema=public npx prisma db push",
     "test:e2e": "jest -c jest.e2e.config.js",
     "test:cov": "jest -c jest.unit.config.js --coverage",
     "test:watch": "jest -c jest.unit.config.js --watch",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand"
+    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
+    "db:test:push": "cross-env DATABASE_URL=postgresql://www:www@localhost:5434/www_test?schema=public npx prisma db push",
+    "db:test:seed": "cross-env DATABASE_URL=postgresql://www:www@localhost:5434/www_test?schema=public npx prisma db seed",
+    "setup": "npm install && npx prisma generate && npx prisma db push && npx prisma db seed && npm run db:test:push && npm run db:test:seed && npm run build",
+    "test:all": "npm run test:unit && npm run test:e2e"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -51,6 +54,7 @@
     "@types/passport": "^1.0.17",
     "@types/passport-jwt": "^4.0.1",
     "@types/supertest": "^6.0.2",
+    "cross-env": "^10.1.0",
     "dotenv": "^17.2.3",
     "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.0.1",
