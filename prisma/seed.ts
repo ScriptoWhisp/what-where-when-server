@@ -80,7 +80,7 @@ async function seedTestData() {
 
   for (const name of teamNames) {
     const team = await prisma.team.create({
-      data: { name, teamCode: `${name.split(' ')[0].toUpperCase()}_CODE` },
+      data: { name, teamCode: `${name.split(' ')[0].toUpperCase()}_CODE`, managerId: host.id},
     });
 
     const participant = await prisma.gameParticipant.create({
