@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -20,18 +19,20 @@ import {
 } from './mappers/host-game.mapper';
 import {
   gameVersion,
-  generate4DigitPasscode,
   parseDateOfEvent,
 } from './utils/game.util';
 import { GameStatuses } from './contracts/common.dto';
 import { CheckGameResponse } from '../game-client-player/main/player.controller';
 import { ParticipantDomain } from './contracts/game-engine.dto';
-
-const GAME_CODE_LOCK = 424242;
+import { GameSaveDelegate } from './game-save.delegate';
+import { PasscodeService } from './passcode.service';
 
 @Injectable()
 export class GameRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly passcodeService: PasscodeService,
+  ) {}
 
   async findGameByPasscodeWithTeams(
     passcode: number,
@@ -74,7 +75,7 @@ export class GameRepository {
       },
       data: {
         isAvailable: false,
-        socketId: socketId
+        socketId: socketId,
       },
       include: {
         team: true,
@@ -88,44 +89,6 @@ export class GameRepository {
     await this.prisma.gameParticipant.updateMany({
       where: { socketId },
       data: { isAvailable: true, socketId: null },
-    });
-  }
-
-  private async allocateAvailablePasscode(
-    tx: Prisma.TransactionClient,
-  ): Promise<number> {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${GAME_CODE_LOCK})`;
-
-    const activeStatuses = [GameStatuses.DRAFT, GameStatuses.LIVE];
-
-    const rows = await tx.game.findMany({
-      where: { status: { in: activeStatuses } },
-      select: { passcode: true },
-    });
-
-    const used = new Set<number>();
-    for (const r of rows) used.add(r.passcode);
-
-    if (used.size >= 9000) {
-      throw new ConflictException({
-        code: 'CONFLICT',
-        message: 'No passcodes available',
-      });
-    }
-
-    for (let i = 0; i < 64; i++) {
-      const candidate = generate4DigitPasscode();
-      if (!used.has(candidate)) return candidate;
-    }
-
-    for (let candidate = 1000; candidate <= 9999; candidate++) {
-      if (!used.has(candidate)) return candidate;
-    }
-
-    // Should be unreachable due to used.size check
-    throw new ConflictException({
-      code: 'CONFLICT',
-      message: 'No passcodes available',
     });
   }
 
@@ -160,7 +123,7 @@ export class GameRepository {
     status: string;
   }): Promise<Game> {
     return this.prisma.$transaction(async (tx) => {
-      const passcode = await this.allocateAvailablePasscode(tx);
+      const passcode = await this.passcodeService.allocateAvailablePasscode(tx);
       const game = await tx.game.create({
         data: {
           hostId: params.hostId,
@@ -231,39 +194,22 @@ export class GameRepository {
     const { hostId, req } = params;
 
     const full = await this.prisma.$transaction(async (tx) => {
-      if (req.game.teams.length > 0 && req.game.categories.length === 0) {
-        throw new BadRequestException({
-          code: 'VALIDATION_ERROR',
-          message: 'At least one category is required when adding teams',
-        });
-      }
-
       const existing = await tx.game.findFirst({
         where: { id: req.game_id, hostId },
       });
-      if (!existing) {
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: 'Game not found',
-        });
-      }
+      if (!existing) throw new NotFoundException('Game not found');
 
       const currentVersion = gameVersion(existing);
-      if (currentVersion !== req.version) {
-        throw new ConflictException({
-          code: 'CONFLICT',
-          message: 'Version conflict. Reload game and retry save.',
-          details: { current_version: currentVersion },
-        });
-      }
+      if (currentVersion !== req.version)
+        throw new ConflictException('Version conflict');
 
-      const date = parseDateOfEvent(req.game.date_of_event);
+      const saver = new GameSaveDelegate(tx);
 
       await tx.game.update({
         where: { id: existing.id },
         data: {
           name: req.game.title,
-          date,
+          date: parseDateOfEvent(req.game.date_of_event),
           timeToThink: req.game.settings.time_to_think_sec,
           timeToAnswer: req.game.settings.time_to_answer_sec,
           timeToDisputeEnd: req.game.settings.time_to_dispute_end_min * 60,
@@ -275,209 +221,25 @@ export class GameRepository {
         },
       });
 
-      if (req.deleted_question_ids?.length) {
-        await tx.question.deleteMany({
-          where: {
-            id: { in: req.deleted_question_ids },
-            round: { gameId: existing.id },
-          },
-        });
-      }
-
-      if (req.deleted_round_ids?.length) {
-        await tx.question.deleteMany({
-          where: {
-            roundId: { in: req.deleted_round_ids },
-            round: { gameId: existing.id },
-          },
-        });
-        await tx.round.deleteMany({
-          where: { id: { in: req.deleted_round_ids }, gameId: existing.id },
-        });
-      }
-
-      if (req.deleted_team_ids?.length) {
-        await tx.gameParticipant.deleteMany({
-          where: { gameId: existing.id, teamId: { in: req.deleted_team_ids } },
-        });
-      }
-
-      if (req.deleted_category_ids?.length) {
-        await tx.categoryGameRelation.deleteMany({
-          where: {
-            gameId: existing.id,
-            categoryId: { in: req.deleted_category_ids },
-          },
-        });
-      }
-
-      const categoryIds: number[] = [];
-      for (const c of req.game.categories) {
-        let categoryId: number;
-        if (c.id) {
-          const owned = await tx.category.findFirst({
-            where: { id: c.id, userId: hostId },
-          });
-          if (!owned) {
-            throw new NotFoundException({
-              code: 'NOT_FOUND',
-              message: `Category not found: ${c.id}`,
-            });
-          }
-          await tx.category.update({
-            where: { id: c.id },
-            data: { name: c.name, description: c.description ?? null },
-          });
-          categoryId = c.id;
-        } else {
-          const created = await tx.category.create({
-            data: {
-              userId: hostId,
-              name: c.name,
-              description: c.description ?? null,
-            },
-          });
-          categoryId = created.id;
-        }
-        categoryIds.push(categoryId);
-
-        await tx.categoryGameRelation.upsert({
-          where: {
-            categoryId_gameId: { categoryId, gameId: existing.id },
-          },
-          create: { categoryId, gameId: existing.id },
-          update: {},
-        });
-      }
-
-      const defaultCategoryId = categoryIds[0];
-
-      if (req.game.teams.length > 0 && !defaultCategoryId) {
-        throw new BadRequestException({
-          code: 'VALIDATION_ERROR',
-          message:
-            'At least one category is required before adding teams to a game',
-        });
-      }
-
-      for (const t of req.game.teams) {
-        let teamId: number;
-        if (t.id) {
-          const ownedTeam = await tx.team.findFirst({ where: { id: t.id } });
-          if (!ownedTeam) {
-            throw new NotFoundException({
-              code: 'NOT_FOUND',
-              message: `Team not found: ${t.id}`,
-            });
-          }
-          const updated = await tx.team.update({
-            where: { id: t.id },
-            data: { name: t.name, teamCode: t.team_code },
-          });
-          teamId = updated.id;
-        } else {
-          const created = await tx.team.create({
-            data: { name: t.name, teamCode: t.team_code, managerId: hostId },
-          });
-          teamId = created.id;
-        }
-
-        if (defaultCategoryId) {
-          const already = await tx.gameParticipant.findFirst({
-            where: { gameId: existing.id, teamId },
-          });
-          if (!already) {
-            await tx.gameParticipant.create({
-              data: {
-                gameId: existing.id,
-                teamId,
-                categoryId: defaultCategoryId,
-                isAvailable: true,
-              },
-            });
-          }
-        }
-      }
-
-      for (const r of req.game.rounds) {
-        let roundId: number;
-        if (r.id) {
-          const ownedRound = await tx.round.findFirst({
-            where: { id: r.id, gameId: existing.id },
-          });
-          if (!ownedRound) {
-            throw new NotFoundException({
-              code: 'NOT_FOUND',
-              message: `Round not found: ${r.id}`,
-            });
-          }
-          const updated = await tx.round.update({
-            where: { id: r.id },
-            data: { roundNumber: r.round_number, name: r.name ?? null },
-          });
-          roundId = updated.id;
-        } else {
-          const created = await tx.round.create({
-            data: {
-              gameId: existing.id,
-              roundNumber: r.round_number,
-              name: r.name ?? null,
-            },
-          });
-          roundId = created.id;
-        }
-
-        for (const q of r.questions) {
-          if (q.id) {
-            const ownedQuestion = await tx.question.findFirst({
-              where: { id: q.id, round: { gameId: existing.id } },
-            });
-            if (!ownedQuestion) {
-              throw new NotFoundException({
-                code: 'NOT_FOUND',
-                message: `Question not found: ${q.id}`,
-              });
-            }
-            await tx.question.update({
-              where: { id: q.id },
-              data: {
-                roundId,
-                questionNumber: q.question_number,
-                text: q.text,
-                answer: q.answer,
-                timeToThink: q.time_to_think_sec,
-                timeToAnswer: q.time_to_answer_sec,
-              },
-            });
-          } else {
-            await tx.question.create({
-              data: {
-                roundId,
-                questionNumber: q.question_number,
-                text: q.text,
-                answer: q.answer,
-                timeToThink: q.time_to_think_sec,
-                timeToAnswer: q.time_to_answer_sec,
-                isActive: false,
-              },
-            });
-          }
-        }
-      }
+      await saver.deleteEntities(existing.id, req);
+      const categoryIds = await saver.syncCategories(
+        hostId,
+        existing.id,
+        req.game.categories,
+      );
+      await saver.syncTeams(
+        hostId,
+        existing.id,
+        req.game.teams,
+        categoryIds[0],
+      );
+      await saver.syncRounds(existing.id, req.game.rounds);
 
       const updated = await tx.game.findFirst({
         where: { id: existing.id, hostId },
         include: gameDetailsInclude,
       });
-
-      if (!updated) {
-        throw new NotFoundException({
-          code: 'NOT_FOUND',
-          message: 'Game not found after save',
-        });
-      }
-
-      return updated;
+      return updated!;
     });
 
     return mapHostGameDetails(full);

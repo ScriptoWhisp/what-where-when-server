@@ -53,8 +53,8 @@ export class HostController {
   ): Promise<gameDto.HostGamesListResponse> {
     return this.host.listGames(
       host.sub,
-      body.limit ? Number(body.limit) : 50,
-      body.offset ? Number(body.offset) : 0,
+      body.limit,
+      body.offset,
     );
   }
 
