@@ -1,4 +1,5 @@
 /** @type {import('jest').Config} */
+// eslint-disable-next-line no-undef
 module.exports = {
   displayName: 'e2e',
   moduleFileExtensions: ['js', 'json', 'ts'],
