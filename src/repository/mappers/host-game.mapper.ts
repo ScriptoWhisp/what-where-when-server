@@ -160,6 +160,7 @@ export class PlayerMapper {
 }
 
 export class AnswerMapper {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static toDomain(raw: any): AnswerDomain {
     return {
       id: raw.id,
