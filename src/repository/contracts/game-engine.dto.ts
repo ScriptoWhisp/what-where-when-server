@@ -1,7 +1,16 @@
+import { GameStatus } from './common.dto';
+
 export enum GamePhase {
   IDLE = 'IDLE',
   THINKING = 'THINKING',
   ANSWERING = 'ANSWERING',
+}
+
+export enum AnswerStatus {
+  UNSET = 'UNSET',
+  CORRECT = 'CORRECT',
+  INCORRECT = 'INCORRECT',
+  DISPUTABLE = 'DISPUTABLE'
 }
 
 export interface JoinGameDto {
@@ -46,6 +55,8 @@ export interface GameState {
   phase: GamePhase;
   seconds: number;
   isPaused: boolean;
+  activeQuestionId?: number;
+  status?: GameStatus;
 }
 
 export interface ParticipantDomain {
@@ -67,4 +78,14 @@ export interface GamePublicDomain {
   id: number;
   name: string;
   teams: TeamSelectionDomain[];
+}
+
+export interface AnswerDomain {
+  id: number;
+  questionId: number;
+  participantId: number;
+  teamName: string;
+  answerText: string;
+  status: string;
+  submittedAt: string;
 }

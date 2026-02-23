@@ -53,7 +53,7 @@ describe('GameEngineService', () => {
         gameId: gameId,
       });
 
-      await service.getGameStateAndJoinGame(gameId, teamId, socketId);
+      await service.getGameConfigAndJoinGame(gameId, teamId, socketId);
 
       expect(repository.teamJoinGame).toHaveBeenCalledWith(gameId, teamId, socketId);
     });

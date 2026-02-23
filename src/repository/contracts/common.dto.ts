@@ -11,7 +11,7 @@ export const GameStatuses = {
   DRAFT: 'DRAFT',
   LIVE: 'LIVE',
   FINISHED: 'FINISHED',
-} as const;
+}
 
 export type GameStatus = (typeof GameStatuses)[keyof typeof GameStatuses];
 

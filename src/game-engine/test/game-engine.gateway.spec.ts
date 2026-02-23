@@ -75,7 +75,7 @@ describe('GameEngineGateway', () => {
 
       expect(mockSocket.join).toHaveBeenCalledWith('game_10');
 
-      expect(service.getGameStateAndJoinGame).toHaveBeenCalledWith(
+      expect(service.getGameConfigAndJoinGame).toHaveBeenCalledWith(
         10,
         1,
         'socket_1',
