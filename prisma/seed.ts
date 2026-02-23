@@ -1,6 +1,7 @@
 import { PrismaClient, GameParticipant, Question } from '@prisma/client';
 import { HostRoles } from '../src/repository/contracts/auth.dto';
 import * as bcrypt from 'bcryptjs';
+import { AnswerStatus } from '../src/repository/contracts/game-engine.dto';
 
 const prisma = new PrismaClient();
 
@@ -33,10 +34,10 @@ async function seedMetadata() {
   });
   await prisma.answerStatus.createMany({
     data: [
-      { name: 'UNSET' },
-      { name: 'CORRECT' },
-      { name: 'INCORRECT' },
-      { name: 'DISPUTABLE' },
+      { name: AnswerStatus.UNSET },
+      { name: AnswerStatus.CORRECT },
+      { name: AnswerStatus.INCORRECT },
+      { name: AnswerStatus.DISPUTABLE },
     ],
   });
   await prisma.disputeStatus.createMany({

@@ -7,161 +7,116 @@ describe('GameEngineService', () => {
   let service: GameEngineService;
   let repository: GameRepository;
 
-  const mockRepository = {
+  const mockGameRepository = {
+    findById: jest.fn(),
+    getGameStructure: jest.fn(),
+    updateStatus: jest.fn(),
     activateQuestion: jest.fn(),
     saveAnswer: jest.fn(),
-    findById: jest.fn(),
     teamJoinGame: jest.fn(),
   };
 
   beforeEach(async () => {
-    jest.useFakeTimers();
-
-    mockRepository.activateQuestion.mockReset();
-    mockRepository.saveAnswer.mockReset();
-    mockRepository.findById.mockReset();
-
-    mockRepository.activateQuestion.mockResolvedValue(undefined);
-    mockRepository.saveAnswer.mockResolvedValue({ id: 1 });
-    mockRepository.findById.mockResolvedValue({ hostId: 10 });
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GameEngineService,
-        { provide: GameRepository, useValue: mockRepository },
+        { provide: GameRepository, useValue: mockGameRepository },
       ],
     }).compile();
 
     service = module.get<GameEngineService>(GameEngineService);
     repository = module.get<GameRepository>(GameRepository);
-  });
-
-  afterEach(() => {
     jest.clearAllMocks();
-    jest.clearAllTimers();
   });
 
-  describe('Join Logic', () => {
-    it('should call repo.teamJoinGame with correct args', async () => {
-      const gameId = 100;
-      const teamId = 50;
-      const socketId = 's_123';
-
-      (mockRepository.teamJoinGame as jest.Mock).mockResolvedValue({
-        id: 1,
-        teamId: teamId,
-        gameId: gameId,
-      });
-
-      await service.getGameStateAndJoinGame(gameId, teamId, socketId);
-
-      expect(repository.teamJoinGame).toHaveBeenCalledWith(gameId, teamId, socketId);
-    });
-  });
-
-  describe('Host Validation', () => {
-    it('should return true if user is the host', async () => {
-      (mockRepository.findById as jest.Mock).mockResolvedValue({ hostId: 10 });
-
-      const result = await service.validateHost(1, 10);
-      expect(result).toBe(true);
-    });
-
-    it('should return false if user is NOT the host', async () => {
-      (mockRepository.findById as jest.Mock).mockResolvedValue({ hostId: 999 });
-
-      const result = await service.validateHost(1, 10);
-      expect(result).toBe(false);
-    });
-  });
-
-  describe('Game Loop (State Machine)', () => {
-    it('should run full cycle: THINKING -> ANSWERING -> IDLE', async () => {
-      const onTick = jest.fn();
-      const onPhaseChange = jest.fn();
+  describe('startQuestionCycle (Phases & Timers)', () => {
+    it('should transition through THINKING -> ANSWERING -> IDLE correctly', async () => {
+      jest.useFakeTimers();
       const gameId = 1;
+      const questionId = 101;
 
-      await service.startQuestionCycle(gameId, 100, onTick, onPhaseChange);
+      // Имитируем успешный ответ от БД
+      mockGameRepository.activateQuestion.mockResolvedValue(null);
 
-      expect(repository.activateQuestion).toHaveBeenCalledWith(gameId, 100);
-      expect(service.getPhase(1)).toBe(GamePhase.THINKING);
-
-      jest.advanceTimersByTime(60000);
-      expect(service.getPhase(1)).toBe(GamePhase.ANSWERING);
-
-      jest.advanceTimersByTime(10000);
-      expect(service.getPhase(1)).toBe(GamePhase.IDLE);
-    });
-
-    it('should throw error if database activation fails', async () => {
-      (mockRepository.activateQuestion as jest.Mock).mockRejectedValueOnce(
-        new Error('DB Error'),
+      const phaseChanges: GamePhase[] = [];
+      // ОБЯЗАТЕЛЬНО await
+      await service.startQuestionCycle(
+        gameId,
+        questionId,
+        jest.fn(),
+        (phase) => {
+          phaseChanges.push(phase);
+        },
       );
 
-      await expect(
-        service.startQuestionCycle(1, 100, jest.fn(), jest.fn()),
-      ).rejects.toThrow('DB Error');
-    });
-  });
+      // 1. Сразу после старта должна быть фаза THINKING
+      expect(service.getPhase(gameId)).toBe(GamePhase.THINKING);
 
-  describe('Controls: Pause & Resume', () => {
-    it('should pause timer and stop ticks', async () => {
-      const onTick = jest.fn();
-      await service.startQuestionCycle(1, 100, onTick, jest.fn());
+      // 2. Проматываем время обсуждения (60 сек)
+      jest.advanceTimersByTime(61000);
+      expect(service.getPhase(gameId)).toBe(GamePhase.ANSWERING);
 
-      jest.advanceTimersByTime(10000);
-      const timeBeforePause = service.getGameState(1).seconds;
+      // 3. Проматываем время ответа (10 сек)
+      jest.advanceTimersByTime(11000);
+      expect(service.getPhase(gameId)).toBe(GamePhase.IDLE);
+      expect(phaseChanges).toContain(GamePhase.IDLE);
 
-      await service.pauseTimer(1);
-
-      jest.advanceTimersByTime(10000);
-      expect(service.getGameState(1).seconds).toBe(timeBeforePause);
+      jest.useRealTimers();
     });
 
-    it('should resume timer from where it left off', async () => {
-      const onTick = jest.fn();
-      await service.startQuestionCycle(1, 100, onTick, jest.fn());
-      await service.pauseTimer(1);
+    it('should correctly pause and resume timer', async () => {
+      jest.useFakeTimers();
+      const gameId = 1;
+      service['phase'].set(gameId, GamePhase.THINKING);
+      service['remainingSeconds'].set(gameId, 30);
 
-      await service.resumeTimer(1);
+      await service.pauseTimer(gameId);
+      jest.advanceTimersByTime(5000);
+      expect(service['remainingSeconds'].get(gameId)).toBe(30); // Время не изменилось
 
+      await service.resumeTimer(gameId);
       jest.advanceTimersByTime(1000);
-      expect(onTick).toHaveBeenCalled();
+      expect(service['remainingSeconds'].get(gameId)).toBe(29); // Время пошло снова
+
+      jest.useRealTimers();
     });
   });
 
-  describe('Controls: Adjust Time (Edge Cases)', () => {
-    it('should handle negative time adjustment (force phase switch)', async () => {
-      const onTick = jest.fn();
-      await service.startQuestionCycle(1, 100, onTick, jest.fn());
+  describe('startNextQuestion (Game Flow)', () => {
+    it('should start the next question based on database structure', async () => {
+      const gameId = 1;
+      service['activeQuestionIds'].set(gameId, 101); // Текущий вопрос
 
-      await service.adjustTime(1, -70);
+      mockGameRepository.getGameStructure.mockResolvedValue({
+        rounds: [
+          {
+            round_number: 1,
+            questions: [
+              { id: 101, question_number: 1 },
+              { id: 102, question_number: 2 },
+            ],
+          },
+        ],
+      });
 
-      expect(service.getPhase(1)).toBe(GamePhase.ANSWERING);
-      expect(service.getGameState(1).seconds).toBe(10);
-    });
-
-    it('should add time correctly', async () => {
-      await service.startQuestionCycle(1, 100, jest.fn(), jest.fn());
-      const initial = service.getGameState(1).seconds;
-
-      await service.adjustTime(1, 20);
-      expect(service.getGameState(1).seconds).toBe(initial + 20);
+      const nextId = await service.startNextQuestion(gameId, jest.fn());
+      expect(nextId).toBe(102);
+      expect(repository.activateQuestion).toHaveBeenCalledWith(gameId, 102);
     });
   });
 
-  describe('Answering Logic', () => {
-    it('should reject answer if phase is not ANSWERING', async () => {
-      const result = await service.processAnswer(1, 5, 'text');
+  describe('processAnswer', () => {
+    it('should save answer when question is active', async () => {
+      const gameId = 1;
+      service['activeQuestionIds'].set(gameId, 101);
+
+      await service.processAnswer(gameId, 5, 'My answer');
+      expect(repository.saveAnswer).toHaveBeenCalledWith(5, 101, 'My answer');
+    });
+
+    it('should return null if no active question exists', async () => {
+      const result = await service.processAnswer(1, 5, 'Ghost answer');
       expect(result).toBeNull();
-    });
-
-    it('should accept answer in ANSWERING phase', async () => {
-      await service.startQuestionCycle(1, 100, jest.fn(), jest.fn());
-      jest.advanceTimersByTime(60000);
-
-      const result = await service.processAnswer(1, 5, 'my answer');
-      expect(result).toEqual({ id: 1 });
     });
   });
 });

@@ -14,6 +14,7 @@ import {
   SaveGameRequest,
 } from './contracts/game.dto';
 import {
+  AnswerMapper,
   mapHostGameCard,
   mapHostGameDetails,
   PlayerMapper,
@@ -23,15 +24,42 @@ import {
   generate4DigitPasscode,
   parseDateOfEvent,
 } from './utils/game.util';
-import { GameStatuses } from './contracts/common.dto';
+import { GameId, GameStatus, GameStatuses } from './contracts/common.dto';
 import { CheckGameResponse } from '../game-client-player/main/player.controller';
-import { ParticipantDomain } from './contracts/game-engine.dto';
+import {
+  AnswerDomain,
+  AnswerStatus,
+  ParticipantDomain,
+} from './contracts/game-engine.dto';
 
 const GAME_CODE_LOCK = 424242;
 
 @Injectable()
 export class GameRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  async getAnswersByGame(gameId: number): Promise<AnswerDomain[]> {
+    const answers = await this.prisma.answer.findMany({
+      where: { participant: { gameId } },
+      include: {
+        participant: { include: { team: true } },
+        status: true,
+      },
+      orderBy: { submittedAt: 'asc' },
+    });
+    console.log(answers)
+    return answers.map(AnswerMapper.toDomain);
+  }
+
+  async updateStatus(gameId: GameId, status: GameStatus): Promise<Game> {
+    return this.prisma.game.update({
+      where: { id: gameId },
+      data: {
+        status,
+        modifiedAt: new Date(),
+      },
+    });
+  }
 
   async findGameByPasscodeWithTeams(
     passcode: number,
@@ -74,7 +102,7 @@ export class GameRepository {
       },
       data: {
         isAvailable: false,
-        socketId: socketId
+        socketId: socketId,
       },
       include: {
         team: true,
@@ -211,6 +239,14 @@ export class GameRepository {
 
   async findById(id: number): Promise<Game | null> {
     return this.prisma.game.findUnique({ where: { id } });
+  }
+
+  async getGameStructure(gameId: number): Promise<HostGameDetails | null> {
+    const row = await this.prisma.game.findUnique({
+      where: { id: gameId },
+      include: gameDetailsInclude,
+    });
+    return row ? mapHostGameDetails(row) : null;
   }
 
   async getHostGameDetails(params: {
@@ -510,9 +546,13 @@ export class GameRepository {
     ]);
   }
 
-  async saveAnswer(participantId: number, questionId: number, text: string) {
-    const statusId = await this.getStatusIdOrThrow('UNSET');
-    return this.prisma.answer.create({
+  async saveAnswer(
+    participantId: number,
+    questionId: number,
+    text: string,
+  ): Promise<AnswerDomain> {
+    const statusId = await this.getStatusIdOrThrow(AnswerStatus.UNSET);
+    const answerToSave = {
       data: {
         gameParticipantId: participantId,
         questionId: questionId,
@@ -520,7 +560,10 @@ export class GameRepository {
         submittedAt: new Date(),
         statusId: statusId,
       },
-    });
+    };
+    const res = await this.prisma.answer.create(answerToSave);
+    // add update
+    return AnswerMapper.toDomain(res);
   }
 
   async getAnswersByQuestion(questionId: number) {
@@ -554,7 +597,9 @@ export class GameRepository {
   }
 
   async createDispute(answerId: number, comment: string) {
-    const disputableStatusId = await this.getStatusIdOrThrow('DISPUTABLE');
+    const disputableStatusId = await this.getStatusIdOrThrow(
+      AnswerStatus.DISPUTABLE,
+    );
     const openStatus = await this.prisma.disputeStatus.findFirst({
       where: { name: 'OPEN' },
     });
@@ -576,7 +621,7 @@ export class GameRepository {
   }
 
   async getLeaderboard(gameId: number) {
-    const correctStatusId = await this.getStatusIdOrThrow('CORRECT');
+    const correctStatusId = await this.getStatusIdOrThrow(AnswerStatus.CORRECT);
     const scores = await this.prisma.answer.groupBy({
       by: ['gameParticipantId'],
       where: {

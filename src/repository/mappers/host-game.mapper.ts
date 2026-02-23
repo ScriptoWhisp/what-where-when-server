@@ -7,6 +7,8 @@ import {
   gameVersion,
 } from '../utils/game.util';
 import {
+  AnswerDomain,
+  AnswerStatus,
   GamePublicDomain,
   ParticipantDomain,
 } from '../contracts/game-engine.dto';
@@ -153,6 +155,21 @@ export class PlayerMapper {
           isTaken: !participant?.isAvailable,
         };
       }),
+    };
+  }
+}
+
+export class AnswerMapper {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  static toDomain(raw: any): AnswerDomain {
+    return {
+      id: raw.id,
+      questionId: raw.questionId,
+      participantId: raw.gameParticipantId,
+      teamName: raw.participant?.team?.name || 'Unknown Team',
+      answerText: raw.answerText,
+      status: raw.status?.name || AnswerStatus.UNSET,
+      submittedAt: raw.submittedAt.toISOString(),
     };
   }
 }

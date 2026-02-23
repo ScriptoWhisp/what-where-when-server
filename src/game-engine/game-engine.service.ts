@@ -1,6 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { GameRepository } from '../repository/game.repository';
-import { GameId } from '../repository/contracts/common.dto';
+import {
+  GameId,
+  GameStatus,
+  GameStatuses,
+} from '../repository/contracts/common.dto';
 import { GamePhase, GameState } from '../repository/contracts/game-engine.dto';
 
 @Injectable()
@@ -8,13 +12,14 @@ export class GameEngineService {
   private readonly logger = new Logger(GameEngineService.name);
 
   private readonly phase: Map<GameId, GamePhase> = new Map();
+  private readonly status: Map<GameId, GameStatus> = new Map();
   private readonly remainingSeconds: Map<GameId, number> = new Map();
   private readonly activeTimers: Map<GameId, NodeJS.Timeout> = new Map();
   private readonly activeQuestionIds: Map<GameId, number> = new Map();
 
   private readonly tickCallbacks: Map<
     GameId,
-    (gameId: GameId, sec: number, phase: GamePhase) => void
+    (gameId: GameId, sec: number, phase: GamePhase, qId: number | null) => void
   > = new Map();
   private readonly phaseChangeCallbacks: Map<
     GameId,
@@ -23,31 +28,88 @@ export class GameEngineService {
 
   constructor(private readonly gameRepository: GameRepository) {}
 
+  async startNextQuestion(
+    gameId: GameId,
+    onTick: (gameId: number, sec: number, phase: GamePhase, qId: number | null) => void,
+  ) {
+    const currentQId = this.activeQuestionIds.get(gameId);
+
+    const gameDetails = await this.gameRepository.getGameStructure(gameId);
+    if (!gameDetails) throw new Error('Game not found');
+
+    const allQuestions = gameDetails.rounds
+      .toSorted((a, b) => a.round_number - b.round_number)
+      .flatMap((r) =>
+        r.questions.toSorted((a, b) => a.question_number - b.question_number),
+      );
+
+    const currentIndex = currentQId
+      ? allQuestions.findIndex((q) => q.id === currentQId)
+      : -1;
+    const nextQuestion = allQuestions[currentIndex + 1];
+
+    if (!nextQuestion) {
+      this.logger.warn(`No more questions for game ${gameId}`);
+      return null;
+    }
+
+    if (!nextQuestion.id) {
+      this.logger.error(`No id fo question ${gameId}`);
+      return null;
+    }
+
+    await this.startQuestionCycle(gameId, nextQuestion.id, onTick, () => {});
+    return nextQuestion.id;
+  }
+
+  async startGame(gameId: GameId): Promise<GameStatus> {
+    const setStatusTo = GameStatuses.LIVE;
+    await this.gameRepository.updateStatus(gameId, setStatusTo);
+    this.status.set(gameId, setStatusTo);
+    this.logger.log(`Game ${gameId} started by host`);
+
+    return setStatusTo;
+  }
+
   async validateHost(gameId: GameId, userId: number): Promise<boolean> {
     const game = await this.gameRepository.findById(gameId);
     return game?.hostId === userId;
   }
 
-  public async getGameStateAndJoinGame(
+  public async getGameConfigAndJoinGame(
     gameId: GameId,
     teamId: number,
     socketId: string,
-  ): Promise<GameState> {
-    const game = await this.gameRepository.teamJoinGame(
+  ) {
+    const participant = await this.gameRepository.teamJoinGame(
       gameId,
       teamId,
       socketId,
     );
-    return this.getGameState(game.gameId);
+
+    return {
+      state: await this.getGameState(participant.gameId),
+      participantId: participant.id,
+    };
   }
 
-  public getGameState(gameId: number): GameState {
+  public async getGameState(gameId: GameId): Promise<GameState> {
+    let gameStatus = this.status.get(gameId);
+    if (!gameStatus) {
+      gameStatus = (await this.gameRepository.findById(gameId))?.status;
+    }
+    if (!gameStatus) {
+      console.log(`Game status is null`);
+    }
+
     return {
       phase: this.getPhase(gameId),
       seconds: this.remainingSeconds.get(gameId) ?? 0,
+      activeQuestionId: this.activeQuestionIds.get(gameId),
       isPaused:
         !this.activeTimers.has(gameId) &&
         this.getPhase(gameId) !== GamePhase.IDLE,
+      status: gameStatus,
     };
   }
 
@@ -58,7 +120,7 @@ export class GameEngineService {
   async startQuestionCycle(
     gameId: GameId,
     questionId: number,
-    onTick: (gameId: number, sec: number, phase: GamePhase) => void,
+    onTick: (gameId: number, sec: number, phase: GamePhase, qId) => void,
     onPhaseChange: (phase: GamePhase) => void,
   ) {
     this.cleanupTimer(gameId);
@@ -80,10 +142,6 @@ export class GameEngineService {
   }
 
   async processAnswer(gameId: number, participantId: number, text: string) {
-    if (this.getPhase(gameId) !== GamePhase.ANSWERING) {
-      return null;
-    }
-
     const qId = this.activeQuestionIds.get(gameId);
     if (!qId) {
       this.logger.warn(
@@ -176,9 +234,10 @@ export class GameEngineService {
     const onTick = this.tickCallbacks.get(gameId);
     const seconds = this.remainingSeconds.get(gameId) ?? 0;
     const phase = this.getPhase(gameId);
+    const qId = this.activeQuestionIds.get(gameId) ?? null;
 
     if (onTick) {
-      onTick(Number(gameId), seconds, phase);
+      onTick(Number(gameId), seconds, phase, qId);
     }
   }
 
@@ -192,7 +251,6 @@ export class GameEngineService {
 
   private cleanupTimer(gameId: GameId) {
     this.stopTimer(gameId);
-    this.activeQuestionIds.delete(gameId);
     this.tickCallbacks.delete(gameId);
     this.phaseChangeCallbacks.delete(gameId);
   }
