@@ -5,7 +5,7 @@ import {
 } from '../game-engine.gateway';
 import { GameEngineService } from '../game-engine.service';
 import { GameRepository } from '../../repository/game.repository';
-import { Socket } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { WsJwtGuard } from '../guards/ws-jwt.guard';
 
@@ -33,6 +33,11 @@ describe('GameEngineGateway', () => {
     user: { sub: 1 },
   } as unknown as Socket;
 
+  const mockServer = {
+    to: jest.fn().mockReturnThis(),
+    emit: jest.fn(),
+  } as unknown as Server;
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -42,16 +47,14 @@ describe('GameEngineGateway', () => {
         { provide: GameRepository, useValue: mockRepo },
         {
           provide: JwtService,
-          useValue: {
-            verifyAsync: jest.fn(),
-          },
+          useValue: { verifyAsync: jest.fn() },
         },
       ],
     }).compile();
 
     gateway = module.get<GameEngineGateway>(GameEngineGateway);
     service = module.get<GameEngineService>(GameEngineService);
-    gateway.server = { to: jest.fn().mockReturnThis(), emit: jest.fn() } as any;
+    gateway.server = mockServer;
   });
 
   describe('handleNextQuestion', () => {
