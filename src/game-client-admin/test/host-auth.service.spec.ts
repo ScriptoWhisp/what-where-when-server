@@ -1,7 +1,7 @@
-import { HostAuthService } from './host-auth.service';
 import type { JwtService } from '@nestjs/jwt';
-import type { UserRepository } from '../../../repository/user.repository';
-import { HostRoles } from '../dto/auth.dto';
+import { HostAuthService } from '../main/auth/host-auth.service';
+import { UserRepository } from '../../repository/user.repository';
+import { HostRole } from '../main/auth/auth.dto';
 
 describe('HostAuthService (unit)', () => {
   it('register creates user and returns session', async () => {
@@ -11,7 +11,7 @@ describe('HostAuthService (unit)', () => {
         id: 1,
         email: 'host@example.com',
         password: 'hash',
-        role: HostRoles.HOST,
+        role: HostRole.HOST,
         createdAt: new Date('2026-01-01T00:00:00.000Z'),
       })),
     };

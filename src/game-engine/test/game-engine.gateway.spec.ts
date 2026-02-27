@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import {
-  GameEngineGateway,
-  GameBroadcastEvent,
-} from '../game-engine.gateway';
-import { GameEngineService } from '../game-engine.service';
 import { GameRepository } from '../../repository/game.repository';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
-import { WsJwtGuard } from '../guards/ws-jwt.guard';
+import { GameEngineService } from '../main/service/game-engine.service';
+import {
+  GameBroadcastEvent,
+  GameEngineGateway,
+} from '../main/controller/game-engine.gateway';
+import { WsJwtGuard } from '../main/guards/ws-jwt.guard';
 
 describe('GameEngineGateway', () => {
   let gateway: GameEngineGateway;

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from './prisma/prisma.service';
-import type { HostRole } from './contracts/auth.dto';
 import { coerceHostRole } from './types/guards';
+import { HostRole } from '../game-client-admin/main/auth/auth.dto';
 
 export type AuthUserModel = {
   id: number;

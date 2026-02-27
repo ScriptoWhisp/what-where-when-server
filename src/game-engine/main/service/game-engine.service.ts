@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { GameRepository } from '../repository/game.repository';
+import { GameId } from '../../../repository/contracts/common.dto';
 import {
-  GameId,
+  GamePhase,
+  GameState,
   GameStatus,
-  GameStatuses,
-} from '../repository/contracts/common.dto';
-import { GamePhase, GameState } from '../repository/contracts/game-engine.dto';
+} from '../../../repository/contracts/game-engine.dto';
+import { GameRepository } from '../../../repository/game.repository';
 
 @Injectable()
 export class GameEngineService {
@@ -30,7 +30,12 @@ export class GameEngineService {
 
   async startNextQuestion(
     gameId: GameId,
-    onTick: (gameId: number, sec: number, phase: GamePhase, qId: number | null) => void,
+    onTick: (
+      gameId: number,
+      sec: number,
+      phase: GamePhase,
+      qId: number | null,
+    ) => void,
   ) {
     const currentQId = this.activeQuestionIds.get(gameId);
 
@@ -63,7 +68,7 @@ export class GameEngineService {
   }
 
   async startGame(gameId: GameId): Promise<GameStatus> {
-    const setStatusTo = GameStatuses.LIVE;
+    const setStatusTo = GameStatus.LIVE;
     await this.gameRepository.updateStatus(gameId, setStatusTo);
     this.status.set(gameId, setStatusTo);
     this.logger.log(`Game ${gameId} started by host`);
@@ -96,7 +101,8 @@ export class GameEngineService {
   public async getGameState(gameId: GameId): Promise<GameState> {
     let gameStatus = this.status.get(gameId);
     if (!gameStatus) {
-      gameStatus = (await this.gameRepository.findById(gameId))?.status;
+      gameStatus = (await this.gameRepository.findById(gameId))
+        ?.status as GameStatus;
     }
     if (!gameStatus) {
       console.log(`Game status is null`);

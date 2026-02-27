@@ -11,10 +11,10 @@ import {
 } from '../../../repository/user.repository';
 import {
   HostLoginResponse,
-  type HostPassdropResponse,
+  HostPassdropResponse,
   HostRegisterResponse,
-  HostRoles,
-} from '../dto/auth.dto';
+  HostRole,
+} from './auth.dto';
 
 const DEFAULT_TOKEN_TTL_SECONDS = 12 * 60 * 60; // 12h
 
@@ -42,7 +42,7 @@ export class HostAuthService {
     const user = await this.users.createUser({
       email,
       passwordHash,
-      roleName: HostRoles.HOST,
+      roleName: HostRole.HOST,
     });
 
     return this.issueSession(user);

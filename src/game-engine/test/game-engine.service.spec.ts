@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { GameEngineService } from '../game-engine.service';
 import { GameRepository } from '../../repository/game.repository';
 import { GamePhase } from '../../repository/contracts/game-engine.dto';
+import { GameEngineService } from '../main/service/game-engine.service';
 
 describe('GameEngineService', () => {
   let service: GameEngineService;

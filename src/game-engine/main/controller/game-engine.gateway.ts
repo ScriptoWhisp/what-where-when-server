@@ -9,9 +9,9 @@ import {
   OnGatewayDisconnect,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { GameEngineService } from './game-engine.service';
-import { WsJwtGuard } from './guards/ws-jwt.guard';
-import { GameRepository } from '../repository/game.repository';
+import { GameEngineService } from '../service/game-engine.service';
+import { GameRepository } from '../../../repository/game.repository';
+import { WsJwtGuard } from '../guards/ws-jwt.guard';
 import type {
   AdjustTimeDto,
   DisputeDto,
@@ -19,7 +19,7 @@ import type {
   JudgeAnswerDto,
   StartQuestionDto,
   SubmitAnswerDto,
-} from '../repository/contracts/game-engine.dto';
+} from '../../../repository/contracts/game-engine.dto';
 
 /**
  * Events sent from the Host/Admin to the Server

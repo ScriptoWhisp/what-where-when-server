@@ -1,5 +1,3 @@
-import { GameStatus } from './common.dto';
-
 export enum GamePhase {
   IDLE = 'IDLE',
   THINKING = 'THINKING',
@@ -11,6 +9,18 @@ export enum AnswerStatus {
   CORRECT = 'CORRECT',
   INCORRECT = 'INCORRECT',
   DISPUTABLE = 'DISPUTABLE'
+}
+
+export enum GameStatus {
+  DRAFT = 'DRAFT',
+  LIVE = 'LIVE',
+  FINISHED = 'FINISHED',
+}
+
+export enum DisputeStatus {
+  OPEN = 'OPEN',
+  CLOSED = 'CLOSED',
+  RESOLVED = 'RESOLVED'
 }
 
 export interface JoinGameDto {

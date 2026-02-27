@@ -8,16 +8,23 @@ import { HostAuthService } from '../auth/host-auth.service';
 import { HostJwtAuthGuard } from '../auth/jwt-auth.guard';
 import { HostUser } from '../auth/host-user.decorator';
 import type { HostJwtPayload } from '../auth/jwt.strategy';
+import { HostService } from '../service/host.service';
+import type {
+  GameId,
+  Pagination,
+} from '../../../repository/contracts/common.dto';
+import {
+  HostGameCard,
+  HostGameDetails,
+} from '../../../repository/contracts/game.dto';
 import type {
   HostLoginRequest,
   HostLoginResponse,
-  HostRegisterRequest,
-  HostRegisterResponse,
   HostPassdropRequest,
   HostPassdropResponse,
-} from '../dto/auth.dto';
-import { HostService } from '../service/host.service';
-import * as gameDto from '../dto/game.dto';
+  HostRegisterRequest,
+  HostRegisterResponse,
+} from '../auth/auth.dto';
 
 @Controller('host')
 export class HostController {
@@ -49,12 +56,12 @@ export class HostController {
   @Post('games')
   async listGames(
     @HostUser() host: HostJwtPayload,
-    @Body() body: gameDto.HostGamesListRequest,
-  ): Promise<gameDto.HostGamesListResponse> {
+    @Body() body: HostGamesListRequest,
+  ): Promise<HostGamesListResponse> {
     return this.host.listGames(
       host.sub,
-      body.limit ? Number(body.limit) : 50,
-      body.offset ? Number(body.offset) : 0,
+      body.limit,
+      body.offset,
     );
   }
 
@@ -63,7 +70,7 @@ export class HostController {
   async createGame(
     @HostUser() host: HostJwtPayload,
     @Body() body: { title: string; date_of_event: string },
-  ): Promise<gameDto.HostGameGetResponse> {
+  ): Promise<HostGameGetResponse> {
     return this.host.createGame(host.sub, body.title, body.date_of_event);
   }
 
@@ -72,7 +79,7 @@ export class HostController {
   async getGame(
     @HostUser() host: HostJwtPayload,
     @Body() body: {gameId: number},
-  ): Promise<gameDto.HostGameGetResponse> {
+  ): Promise<HostGameGetResponse> {
     return this.host.getGame(host.sub, body.gameId);
   }
 
@@ -80,8 +87,41 @@ export class HostController {
   @Post('game/save')
   async saveGame(
     @HostUser() host: HostJwtPayload,
-    @Body() body: gameDto.SaveGameRequest,
-  ): Promise<gameDto.SaveGameResponse> {
+    @Body() body: SaveGameRequest,
+  ): Promise<SaveGameResponse> {
     return this.host.saveGame(host.sub, body);
   }
 }
+
+export interface HostGamesListResponse {
+  items: HostGameCard[];
+  pagination: Pagination;
+}
+
+export interface HostGameGetResponse {
+  game: HostGameDetails;
+}
+
+export interface SaveGameRequest {
+  game_id: GameId;
+  version: number;
+  game: Omit<
+    HostGameDetails,
+    'id' | 'updated_at' | 'version' | 'status' | 'passcode'
+  >;
+
+  deleted_round_ids?: GameId[];
+  deleted_question_ids?: GameId[];
+  deleted_team_ids?: GameId[];
+  deleted_category_ids?: GameId[];
+}
+
+export interface SaveGameResponse {
+  game: HostGameDetails;
+}
+
+export interface HostGamesListRequest {
+  limit?: number;
+  offset?: number;
+}
+
