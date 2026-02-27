@@ -1,15 +1,13 @@
-import type { GameId, ISODateTime } from './common.dto';
+import { ISODateTime } from '../../../repository/contracts/common.dto';
 
-export enum HostRoles {
+export enum HostRole {
   HOST = 'HOST',
   SCORER = 'SCORER',
   ADMIN = 'ADMIN',
 }
 
-export type HostRole = HostRoles.HOST | HostRoles.SCORER | HostRoles.ADMIN;
-
 export interface HostUser {
-  id: GameId;
+  id: number;
   email: string;
   role: HostRole;
   created_at: ISODateTime;

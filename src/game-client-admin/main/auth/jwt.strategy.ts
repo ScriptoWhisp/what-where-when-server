@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
 import * as passportJwt from 'passport-jwt';
-import type { HostRole } from '../dto/auth.dto';
 import { ExtractJwt } from 'passport-jwt';
+import { HostRole } from './auth.dto';
 
 export interface HostJwtPayload {
   sub: number;

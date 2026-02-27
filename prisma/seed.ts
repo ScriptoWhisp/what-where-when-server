@@ -1,25 +1,30 @@
-import { PrismaClient, GameParticipant, Question } from '@prisma/client';
-import { HostRoles } from '../src/repository/contracts/auth.dto';
+import { GameParticipant, PrismaClient, Question } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
-import { AnswerStatus } from '../src/repository/contracts/game-engine.dto';
+import {
+  AnswerStatus,
+  DisputeStatus,
+} from '../src/repository/contracts/game-engine.dto';
+import { HostRole } from '../src/game-client-admin/main/auth/auth.dto';
 
 const prisma = new PrismaClient();
 
 async function clearDatabase() {
   console.log('Cleaning up database...');
-  await prisma.dispute.deleteMany();
   await prisma.answerStatusHistory.deleteMany();
+  await prisma.dispute.deleteMany();
   await prisma.answer.deleteMany();
   await prisma.question.deleteMany();
-  await prisma.round.deleteMany();
+
+  await prisma.categoryGameRelation.deleteMany();
   await prisma.gameParticipant.deleteMany();
+
+  await prisma.round.deleteMany();
   await prisma.game.deleteMany();
   await prisma.team.deleteMany();
   await prisma.category.deleteMany();
   await prisma.user.deleteMany();
   await prisma.role.deleteMany();
   await prisma.answerStatus.deleteMany();
-  await prisma.disputeStatus.deleteMany();
   console.log('Database cleared.');
 }
 
@@ -27,9 +32,9 @@ async function seedMetadata() {
   console.log('Seeding metadata...');
   await prisma.role.createMany({
     data: [
-      { name: HostRoles.HOST },
-      { name: HostRoles.ADMIN },
-      { name: HostRoles.SCORER },
+      { name: HostRole.HOST },
+      { name: HostRole.ADMIN },
+      { name: HostRole.SCORER },
     ],
   });
   await prisma.answerStatus.createMany({
@@ -41,7 +46,11 @@ async function seedMetadata() {
     ],
   });
   await prisma.disputeStatus.createMany({
-    data: [{ name: 'OPEN' }, { name: 'REVIEWING' }, { name: 'RESOLVED' }],
+    data: [
+      { name: DisputeStatus.OPEN },
+      { name: DisputeStatus.RESOLVED },
+      { name: DisputeStatus.CLOSED },
+    ],
   });
 }
 
@@ -49,7 +58,7 @@ async function seedTestData() {
   console.log('Seeding extended test data...');
 
   const hostRole = await prisma.role.findFirst({
-    where: { name: HostRoles.HOST },
+    where: { name: HostRole.HOST },
   });
   const hashedPassword = await bcrypt.hash('password123', 10);
 
@@ -81,7 +90,11 @@ async function seedTestData() {
 
   for (const name of teamNames) {
     const team = await prisma.team.create({
-      data: { name, teamCode: `${name.split(' ')[0].toUpperCase()}_CODE`, managerId: host.id},
+      data: {
+        name,
+        teamCode: `${name.split(' ')[0].toUpperCase()}_CODE`,
+        managerId: host.id,
+      },
     });
 
     const participant = await prisma.gameParticipant.create({

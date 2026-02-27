@@ -1,20 +1,20 @@
 import { describe, it, expect } from '@jest/globals';
-import { GameStatuses } from '../contracts/common.dto';
 import {
   coerceGameStatus,
   coerceHostRole,
   isGameStatus,
   isHostRole,
 } from '../types/guards';
-import { HostRoles } from '../contracts/auth.dto';
+import { GameStatus } from '../contracts/game-engine.dto';
+import { HostRole } from '../../game-client-admin/main/auth/auth.dto';
 
 
 describe('repository/types/guards', () => {
   describe('GameStatus', () => {
     it('isGameStatus should accept known statuses', () => {
-      expect(isGameStatus(GameStatuses.DRAFT)).toBe(true);
-      expect(isGameStatus(GameStatuses.LIVE)).toBe(true);
-      expect(isGameStatus(GameStatuses.FINISHED)).toBe(true);
+      expect(isGameStatus(GameStatus.DRAFT)).toBe(true);
+      expect(isGameStatus(GameStatus.LIVE)).toBe(true);
+      expect(isGameStatus(GameStatus.FINISHED)).toBe(true);
     });
 
     it('isGameStatus should reject unknown values', () => {
@@ -25,17 +25,17 @@ describe('repository/types/guards', () => {
     });
 
     it('coerceGameStatus should default to DRAFT for unknown values', () => {
-      expect(coerceGameStatus('NOPE')).toBe(GameStatuses.DRAFT);
-      expect(coerceGameStatus(undefined)).toBe(GameStatuses.DRAFT);
-      expect(coerceGameStatus(null)).toBe(GameStatuses.DRAFT);
+      expect(coerceGameStatus('NOPE')).toBe(GameStatus.DRAFT);
+      expect(coerceGameStatus(undefined)).toBe(GameStatus.DRAFT);
+      expect(coerceGameStatus(null)).toBe(GameStatus.DRAFT);
     });
   });
 
   describe('HostRole', () => {
     it('isHostRole should accept known roles', () => {
-      expect(isHostRole(HostRoles.HOST)).toBe(true);
-      expect(isHostRole(HostRoles.SCORER)).toBe(true);
-      expect(isHostRole(HostRoles.ADMIN)).toBe(true);
+      expect(isHostRole(HostRole.HOST)).toBe(true);
+      expect(isHostRole(HostRole.SCORER)).toBe(true);
+      expect(isHostRole(HostRole.ADMIN)).toBe(true);
     });
 
     it('isHostRole should reject unknown values', () => {
@@ -45,9 +45,9 @@ describe('repository/types/guards', () => {
     });
 
     it('coerceHostRole should default to HOST for unknown values', () => {
-      expect(coerceHostRole('NOPE')).toBe(HostRoles.HOST);
-      expect(coerceHostRole(undefined)).toBe(HostRoles.HOST);
-      expect(coerceHostRole(null)).toBe(HostRoles.HOST);
+      expect(coerceHostRole('NOPE')).toBe(HostRole.HOST);
+      expect(coerceHostRole(undefined)).toBe(HostRole.HOST);
+      expect(coerceHostRole(null)).toBe(HostRole.HOST);
     });
   });
 });

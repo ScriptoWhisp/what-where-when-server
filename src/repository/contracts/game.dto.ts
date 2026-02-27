@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
-import type { GameId, ISODateTime, GameStatus, Pagination } from './common.dto';
+import type { GameId, ISODateTime } from './common.dto';
+import { GameStatus } from './game-engine.dto';
 
 export const gameDetailsInclude = Prisma.validator<Prisma.GameInclude>()({
   rounds: {
@@ -78,36 +79,4 @@ export interface HostGameCard {
   id: GameId;
   title: string;
   subtitle: string;
-}
-
-export interface HostGamesListRequest {
-  limit?: number;
-  offset?: number;
-}
-
-export interface HostGamesListResponse {
-  items: HostGameCard[];
-  pagination: Pagination;
-}
-
-export interface HostGameGetResponse {
-  game: HostGameDetails;
-}
-
-export interface SaveGameRequest {
-  game_id: GameId;
-  version: number;
-  game: Omit<
-    HostGameDetails,
-    'id' | 'updated_at' | 'version' | 'status' | 'passcode'
-  >
-
-  deleted_round_ids?: GameId[];
-  deleted_question_ids?: GameId[];
-  deleted_team_ids?: GameId[];
-  deleted_category_ids?: GameId[];
-}
-
-export interface SaveGameResponse {
-  game: HostGameDetails;
 }

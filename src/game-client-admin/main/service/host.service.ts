@@ -2,29 +2,31 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { GameRepository } from '../../../repository/game.repository';
+import {
+  parseDateOfEvent,
+} from '../../../repository/utils/game.util';
 import {
   HostGameGetResponse,
   HostGamesListResponse,
   SaveGameRequest,
   SaveGameResponse,
-} from '../../../repository/contracts/game.dto';
-import {
-  parseDateOfEvent,
-} from '../../../repository/utils/game.util';
-import { GameStatuses } from '../../../repository/contracts/common.dto';
+} from '../controller/host.controller';
+import { GameStatus } from '../../../repository/contracts/game-engine.dto';
+import { HostGameRepository } from '../../../repository/host.game.repository';
 
 
 @Injectable()
 export class HostService {
-  constructor(private readonly games: GameRepository) {}
+  constructor(
+    private readonly hostGameRepository: HostGameRepository
+  ) {}
 
   async listGames(
     hostId: number,
     limit = 50,
     offset = 0,
   ): Promise<HostGamesListResponse> {
-    return this.games.listHostGames({ hostId, limit, offset });
+    return this.hostGameRepository.listHostGames({ hostId, limit, offset });
   }
 
   async createGame(
@@ -34,14 +36,14 @@ export class HostService {
   ): Promise<HostGameGetResponse> {
     const date = parseDateOfEvent(date_of_event);
 
-    const created = await this.games.createGameWithAutoPasscode({
+    const created = await this.hostGameRepository.createGameWithAutoPasscode({
       hostId,
       name: title,
       date,
-      status: GameStatuses.DRAFT,
+      status: GameStatus.DRAFT,
     });
 
-    const full = await this.games.getHostGameDetails({
+    const full = await this.hostGameRepository.getHostGameDetails({
       hostId,
       gameId: created.id,
     });
@@ -55,7 +57,7 @@ export class HostService {
   }
 
   async getGame(hostId: number, game_id: number): Promise<HostGameGetResponse> {
-    const game = await this.games.getHostGameDetails({
+    const game = await this.hostGameRepository.getHostGameDetails({
       hostId,
       gameId: game_id,
     });
@@ -72,7 +74,7 @@ export class HostService {
     hostId: number,
     req: SaveGameRequest,
   ): Promise<SaveGameResponse> {
-    const game = await this.games.saveHostGame({ hostId, req });
+    const game = await this.hostGameRepository.saveHostGame({ hostId, req });
     return { game };
   }
 }

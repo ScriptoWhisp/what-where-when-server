@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
-import { GameEngineService } from './game-engine.service';
-import { GameEngineGateway } from './game-engine.gateway';
 import { PrismaModule } from '../repository/prisma/prisma.module';
 import { GameRepository } from '../repository/game.repository';
-import { WsJwtGuard } from './guards/ws-jwt.guard';
+import { GameEngineService } from './main/service/game-engine.service';
+import { GameEngineGateway } from './main/controller/game-engine.gateway';
+import { WsJwtGuard } from './main/guards/ws-jwt.guard';
 
 @Module({
   imports: [
