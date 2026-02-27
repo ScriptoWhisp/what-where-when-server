@@ -1,4 +1,4 @@
-import type { Category, Game, GameParticipant, Team } from '@prisma/client';
+import type { Category, GameParticipant, Team } from '@prisma/client';
 import type { HostGameCard, HostGameDetails } from '../contracts/game.dto';
 import { coerceGameStatus } from '../types/guards';
 import {
@@ -9,7 +9,6 @@ import {
 import {
   AnswerDomain,
   AnswerStatus,
-  GamePublicDomain,
   ParticipantDomain,
 } from '../contracts/game-engine.dto';
 
