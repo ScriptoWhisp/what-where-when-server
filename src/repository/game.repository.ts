@@ -13,7 +13,6 @@ import {
   PlayerMapper,
 } from './mappers/host-game.mapper';
 import { GameId } from './contracts/common.dto';
-import { CheckGameResponse } from '../game-client-player/main/player.controller';
 import {
   AnswerDomain,
   AnswerStatus,
@@ -47,36 +46,6 @@ export class GameRepository {
         modifiedAt: new Date(),
       },
     });
-  }
-
-  async findGameByPasscodeWithTeams(
-    passcode: number,
-  ): Promise<CheckGameResponse | null> {
-    const game = await this.prisma.game.findFirst({
-      where: {
-        passcode,
-        status: { not: GameStatus.FINISHED },
-      },
-      include: {
-        participants: {
-          include: {
-            team: true,
-          },
-        },
-      },
-    });
-
-    if (!game) return null; // Add client error later
-
-    return {
-      gameId: game.id,
-      gameName: game.name,
-      teams: game.participants.map((p) => ({
-        teamId: p.teamId,
-        name: p.team.name,
-        isAvailable: p.isAvailable,
-      })),
-    };
   }
 
   async teamJoinGame(
