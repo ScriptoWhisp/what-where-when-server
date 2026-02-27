@@ -7,7 +7,6 @@ import { HostService } from './service/host.service';
 import { HostAuthService } from './auth/host-auth.service';
 import { HostJwtStrategy } from './auth/jwt.strategy';
 import { UserRepository } from '../../repository/user.repository';
-import { GameRepository } from '../../repository/game.repository';
 import { HostJwtAuthGuard } from './auth/jwt-auth.guard';
 import { AppConfigModule } from '../../config/app-config.module';
 import { HostGameRepository } from '../../repository/host.game.repository';
