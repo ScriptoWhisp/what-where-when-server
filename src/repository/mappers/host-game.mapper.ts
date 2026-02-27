@@ -139,24 +139,6 @@ export class PlayerMapper {
       teamName: data.team.name,
     };
   }
-
-  static toGamePublicDomain(
-    game: Game & { teams: Team[] },
-    participants: GameParticipant[],
-  ): GamePublicDomain {
-    return {
-      id: game.id,
-      name: game.name,
-      teams: game.teams.map((team) => {
-        const participant = participants.find((p) => p.teamId === team.id);
-        return {
-          id: team.id,
-          name: team.name,
-          isTaken: !participant?.isAvailable,
-        };
-      }),
-    };
-  }
 }
 
 export class AnswerMapper {
