@@ -173,7 +173,6 @@ describe('GameEngineService', () => {
         gameId,
       });
 
-      // Реализация моков через переменные
       mockGameCacheService.getRemainingSeconds.mockImplementation(
         async () => seconds,
       );
@@ -200,7 +199,6 @@ describe('GameEngineService', () => {
       const onTick = jest.fn();
       await service.startQuestionCycle(gameId, questionId, onTick, jest.fn());
 
-      // Проверка первой фазы
       expect(currentPhase).toBe(GamePhase.THINKING);
       expect(onTick).toHaveBeenCalledWith(
         gameId,
@@ -209,20 +207,14 @@ describe('GameEngineService', () => {
         questionId,
       );
 
-      // Сбрасываем счетчик вызовов, чтобы проверить именно второй вызов
       onTick.mockClear();
 
-      // ПЕРЕХОД: Эмулируем окончание времени
       seconds = 0;
       jest.advanceTimersByTime(1000);
 
-      // !!! КЛЮЧЕВОЙ МОМЕНТ !!!
-      // Нам нужно прогнать очередь микрозадач много раз, чтобы вся цепочка await в сервисе завершилась
       for (let i = 0; i < 15; i++) {
         await Promise.resolve();
       }
-
-      // Теперь состояние должно обновиться
       expect(currentPhase).toBe(GamePhase.ANSWERING);
       expect(onTick).toHaveBeenCalledWith(
         gameId,
