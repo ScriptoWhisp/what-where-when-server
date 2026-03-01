@@ -7,14 +7,6 @@ export interface Pagination {
   total: number;
 }
 
-export const GameStatuses = {
-  DRAFT: 'DRAFT',
-  LIVE: 'LIVE',
-  FINISHED: 'FINISHED',
-}
-
-export type GameStatus = (typeof GameStatuses)[keyof typeof GameStatuses];
-
 export interface ApiError {
   code:
     | 'VALIDATION_ERROR'

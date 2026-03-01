@@ -23,6 +23,8 @@ describe('Host flow (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
+    jest.clearAllTimers();
+    jest.useRealTimers();
   });
 
   it('register -> create -> list -> get -> save', async () => {

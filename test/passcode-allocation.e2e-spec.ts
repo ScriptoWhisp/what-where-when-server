@@ -6,7 +6,7 @@ import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/repository/prisma/prisma.service';
 import { resetDb } from './helpers/db';
-import { GameStatuses } from '../src/repository/contracts/common.dto';
+import { GameStatus } from '../src/repository/contracts/game-engine.dto';
 
 describe('Passcode allocation', () => {
   let app: INestApplication;
@@ -97,7 +97,7 @@ describe('Passcode allocation', () => {
     // Mark it as FINISHED directly in DB
     await prisma.game.update({
       where: { id: gameId },
-      data: { status: GameStatuses.FINISHED },
+      data: { status: GameStatus.FINISHED },
     });
 
     // Now 1000 should be "free" again because FINISHED is ignored

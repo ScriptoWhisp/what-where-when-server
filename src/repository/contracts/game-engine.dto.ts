@@ -1,5 +1,3 @@
-import { GameStatus } from './common.dto';
-
 export enum GamePhase {
   IDLE = 'IDLE',
   THINKING = 'THINKING',
@@ -11,6 +9,18 @@ export enum AnswerStatus {
   CORRECT = 'CORRECT',
   INCORRECT = 'INCORRECT',
   DISPUTABLE = 'DISPUTABLE'
+}
+
+export enum GameStatus {
+  DRAFT = 'DRAFT',
+  LIVE = 'LIVE',
+  FINISHED = 'FINISHED',
+}
+
+export enum DisputeStatus {
+  OPEN = 'OPEN',
+  CLOSED = 'CLOSED',
+  RESOLVED = 'RESOLVED'
 }
 
 export interface JoinGameDto {
@@ -27,6 +37,7 @@ export interface SubmitAnswerDto {
   gameId: number;
   participantId: number;
   answer: string;
+  questionId: number;
 }
 
 export interface GetAnswersDto {
@@ -56,6 +67,7 @@ export interface GameState {
   seconds: number;
   isPaused: boolean;
   activeQuestionId?: number;
+  activeQuestionNumber?: number;
   status?: GameStatus;
 }
 
@@ -88,4 +100,11 @@ export interface AnswerDomain {
   answerText: string;
   status: string;
   submittedAt: string;
+  isLate?: boolean;
+}
+
+export interface QuestionSettings {
+  timeToThink: number;
+  timeToAnswer: number;
+  gameId: number;
 }
