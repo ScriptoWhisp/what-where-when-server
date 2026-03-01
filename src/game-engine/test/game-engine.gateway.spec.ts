@@ -20,6 +20,7 @@ describe('GameEngineGateway', () => {
     getGameState: jest.fn(),
     startGame: jest.fn(),
     adminSyncGame: jest.fn(),
+    stopQuestion: jest.fn(),
   };
 
   const mockRepo = {
@@ -119,6 +120,25 @@ describe('GameEngineGateway', () => {
         GameBroadcastEvent.SyncState,
         mockSyncData,
       );
+    });
+  });
+
+  describe('handleStopQuestion', () => {
+    it('should throw error if user is not admin', async () => {
+      mockService.validateHost.mockResolvedValue(false);
+
+      await expect(
+        gateway.handleStopQuestion(mockSocket, { gameId: 1 }),
+      ).rejects.toThrow('Forbidden');
+    });
+
+    it('should call service.stopQuestion if admin', async () => {
+      mockService.validateHost.mockResolvedValue(true);
+      mockService.stopQuestion = jest.fn();
+
+      await gateway.handleStopQuestion(mockSocket, { gameId: 1 });
+
+      expect(mockService.stopQuestion).toHaveBeenCalledWith(1);
     });
   });
 });

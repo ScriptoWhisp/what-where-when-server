@@ -537,4 +537,42 @@ describe('GameEngineService', () => {
       expect(mockGameCacheService.removeCallbacks).toHaveBeenCalled();
     });
   });
+
+  describe('stopQuestion', () => {
+    it('should stop question and transition to IDLE if game is LIVE', async () => {
+      const gameId = 1;
+      const mockOnPhaseChange = jest.fn();
+
+      mockGameCacheService.getStatus.mockResolvedValue(GameStatus.LIVE);
+      mockGameCacheService.getPhaseChangeCallback.mockReturnValue(
+        mockOnPhaseChange,
+      );
+      mockGameCacheService.getTimer.mockReturnValue(
+        setInterval(() => {}, 1000),
+      );
+
+      await service.stopQuestion(gameId);
+
+      expect(mockGameCacheService.setPhase).toHaveBeenCalledWith(
+        gameId,
+        GamePhase.IDLE,
+      );
+      expect(mockGameCacheService.setRemainingSeconds).toHaveBeenCalledWith(
+        gameId,
+        0,
+      );
+      expect(mockGameCacheService.clearTimer).toHaveBeenCalledWith(gameId);
+      expect(mockOnPhaseChange).toHaveBeenCalledWith(GamePhase.IDLE);
+      expect(mockGameCacheService.removeCallbacks).toHaveBeenCalledWith(gameId);
+    });
+
+    it('should do nothing if game is not LIVE', async () => {
+      const gameId = 1;
+      mockGameCacheService.getStatus.mockResolvedValue(GameStatus.DRAFT);
+
+      await service.stopQuestion(gameId);
+
+      expect(mockGameCacheService.setPhase).not.toHaveBeenCalled();
+    });
+  });
 });

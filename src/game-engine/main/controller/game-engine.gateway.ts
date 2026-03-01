@@ -10,7 +10,6 @@ import {
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { GameEngineService } from '../service/game-engine.service';
-import { GameRepository } from '../../../repository/game.repository';
 import { WsJwtGuard } from '../guards/ws-jwt.guard';
 import type {
   AdjustTimeDto,
@@ -33,6 +32,7 @@ export enum AdminRequestEvent {
   PauseTimer = 'admin:pause_timer', // Pauses the current question timer
   ResumeTimer = 'admin:resume_timer', // Resumes the current question timer
   NextQuestion = 'admin:next_question',
+  StopQuestion = 'admin:stop_question',
   FinishGame = 'admin:finish_game',
 }
 
@@ -79,8 +79,17 @@ export class GameEngineGateway implements OnGatewayDisconnect {
 
   constructor(
     private readonly gameService: GameEngineService,
-    private readonly gameRepository: GameRepository,
   ) {}
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(AdminRequestEvent.StopQuestion)
+  async handleStopQuestion(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { gameId: number },
+  ) {
+    await this.ensureAdmin(data.gameId, client);
+    await this.gameService.stopQuestion(data.gameId);
+  }
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage(AdminRequestEvent.NextQuestion)
@@ -136,8 +145,7 @@ export class GameEngineGateway implements OnGatewayDisconnect {
   }
 
   async handleDisconnect(client: Socket) {
-    await this.gameRepository.setParticipantDisconnected(client.id);
-    this.logger.log(`Client disconnected: ${client.id}`);
+    await this.gameService.disconnectParticipant(client.id)
   }
 
   @SubscribeMessage(PlayerRequestEvent.JoinGame)
