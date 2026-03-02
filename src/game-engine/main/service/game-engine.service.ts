@@ -21,6 +21,34 @@ export class GameEngineService {
     private readonly cache: GameCacheService,
   ) {}
 
+  public async stopQuestion(gameId: GameId) {
+    const status = await this.cache.getStatus(gameId);
+    if (status !== GameStatus.LIVE) {
+      this.logger.warn('Status of the game is not LIVE to stop question')
+      return;
+    }
+
+    const onPhaseChange = this.cache.getPhaseChangeCallback(gameId);
+
+    this.stopTimer(gameId);
+
+    await this.cache.setPhase(gameId, GamePhase.IDLE);
+    await this.cache.setRemainingSeconds(gameId, 0);
+
+    await this.notifyTick(gameId);
+
+    if (onPhaseChange) onPhaseChange(GamePhase.IDLE);
+
+    this.cache.removeCallbacks(gameId);
+
+    this.logger.log(`Question manually stopped for game ${gameId}`);
+  }
+
+  public async disconnectParticipant(socketId: string) {
+    await this.gameRepository.setParticipantDisconnected(socketId);
+    this.logger.log(`Client disconnected: ${socketId}`);
+  }
+
   async finishGame(gameId: GameId): Promise<GameStatus> {
     this.cleanupTimer(gameId);
 
