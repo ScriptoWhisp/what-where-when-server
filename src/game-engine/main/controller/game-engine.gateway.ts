@@ -26,6 +26,7 @@ import type {
 export enum AdminRequestEvent {
   Sync = 'admin:sync', // Initial synchronization: joins admin room and fetches all game data
   StartGame = 'admin:start_game', // Transitions game status from DRAFT to LIVE
+  PrepareQuestion = 'admin:prepare_question', // Triggers preparation state of the question
   StartQuestion = 'admin:start_question', // Triggers the start of a specific question cycle
   JudgeAnswer = 'admin:judge_answer', // Submits host's verdict (correct/wrong) for a team's answer
   AdjustTime = 'admin:adjust_time', // Adds or subtracts seconds from the current active timer
@@ -77,9 +78,7 @@ export class GameEngineGateway implements OnGatewayDisconnect {
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(GameEngineGateway.name);
 
-  constructor(
-    private readonly gameService: GameEngineService,
-  ) {}
+  constructor(private readonly gameService: GameEngineService) {}
 
   @UseGuards(WsJwtGuard)
   @SubscribeMessage(AdminRequestEvent.StopQuestion)
@@ -145,7 +144,7 @@ export class GameEngineGateway implements OnGatewayDisconnect {
   }
 
   async handleDisconnect(client: Socket) {
-    await this.gameService.disconnectParticipant(client.id)
+    await this.gameService.disconnectParticipant(client.id);
   }
 
   @SubscribeMessage(PlayerRequestEvent.JoinGame)
@@ -181,14 +180,14 @@ export class GameEngineGateway implements OnGatewayDisconnect {
   }
 
   @UseGuards(WsJwtGuard)
-  @SubscribeMessage(AdminRequestEvent.StartQuestion)
-  async handleStart(
+  @SubscribeMessage(AdminRequestEvent.PrepareQuestion)
+  async handlePrepare(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: StartQuestionDto,
   ) {
     await this.ensureAdmin(data.gameId, client);
 
-    await this.gameService.startQuestionCycle(
+    await this.gameService.prepareQuestion(
       data.gameId,
       data.questionId,
       (gId, seconds, phase, qData) => {
@@ -202,6 +201,19 @@ export class GameEngineGateway implements OnGatewayDisconnect {
       (phase) => {
         this.logger.log(`Game ${data.gameId} phase changed to ${phase}`);
       },
+    );
+  }
+
+  @UseGuards(WsJwtGuard)
+  @SubscribeMessage(AdminRequestEvent.StartQuestion)
+  async handleStart(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: StartQuestionDto,
+  ) {
+    await this.ensureAdmin(data.gameId, client);
+
+    await this.gameService.startQuestionCycle(
+      data.gameId
     );
   }
 

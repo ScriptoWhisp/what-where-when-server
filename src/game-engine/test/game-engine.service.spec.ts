@@ -3,13 +3,15 @@ import { GameRepository } from '../../repository/game.repository';
 import {
   GamePhase,
   GameStatus,
-  QuestionData,
 } from '../../repository/contracts/game-engine.dto';
 import { GameEngineService } from '../main/service/game-engine.service';
 import { GameCacheService } from '../main/service/game-cache.service';
 
 describe('GameEngineService', () => {
   let service: GameEngineService;
+
+  const dummyTimer = setTimeout(() => {}, 0) as unknown as NodeJS.Timeout;
+  clearTimeout(dummyTimer);
 
   const mockGameRepository = {
     findById: jest.fn(),
@@ -30,15 +32,41 @@ describe('GameEngineService', () => {
   };
 
   const mockGameCacheService = {
-    getPhase: jest.fn(),
-    setPhase: jest.fn(),
-    getStatus: jest.fn(),
-    setStatus: jest.fn(),
-    getRemainingSeconds: jest.fn(),
-    setRemainingSeconds: jest.fn(),
-    getActiveQuestionData: jest.fn(),
-    setActiveQuestionData: jest.fn(),
+    _phases: new Map(),
+    _seconds: new Map(),
+    _data: new Map(),
+    _statuses: new Map(),
+    _timers: new Map(),
     _callbacks: new Map(),
+
+    getPhase: jest.fn(async function (id) {
+      return this._phases.get(id) || GamePhase.IDLE;
+    }),
+    setPhase: jest.fn(async function (id, p) {
+      this._phases.set(id, p);
+    }),
+
+    getStatus: jest.fn(async function (id) {
+      return this._statuses.get(id);
+    }),
+    setStatus: jest.fn(async function (id, s) {
+      this._statuses.set(id, s);
+    }),
+
+    getRemainingSeconds: jest.fn(async function (id) {
+      return this._seconds.get(id) ?? 0;
+    }),
+    setRemainingSeconds: jest.fn(async function (id, s) {
+      this._seconds.set(id, s);
+    }),
+
+    getActiveQuestionData: jest.fn(async function (id) {
+      return this._data.get(id);
+    }),
+    setActiveQuestionData: jest.fn(async function (id, d) {
+      this._data.set(id, d);
+    }),
+
     setCallbacks: jest.fn(function (id, onTick, onPhaseChange) {
       this._callbacks.set(id, { onTick, onPhaseChange });
     }),
@@ -51,12 +79,12 @@ describe('GameEngineService', () => {
     removeCallbacks: jest.fn(function (id) {
       this._callbacks.delete(id);
     }),
-    _timers: new Map(),
-    setTimer: jest.fn(function (id, t) {
-      this._timers.set(id, t);
-    }),
+
     getTimer: jest.fn(function (id) {
       return this._timers.get(id);
+    }),
+    setTimer: jest.fn(function (id, t) {
+      this._timers.set(id, t);
     }),
     clearTimer: jest.fn(function (id) {
       const t = this._timers.get(id);
@@ -75,7 +103,31 @@ describe('GameEngineService', () => {
     }).compile();
 
     service = module.get<GameEngineService>(GameEngineService);
+    mockGameCacheService._phases.clear();
+    mockGameCacheService._seconds.clear();
+    mockGameCacheService._data.clear();
+    mockGameCacheService._statuses.clear();
+    mockGameCacheService._timers.clear();
+    mockGameCacheService._callbacks.clear();
+
+
     jest.clearAllMocks();
+    mockGameCacheService.getPhase.mockImplementation(async function (id) {
+      return this._phases.get(id) || GamePhase.IDLE;
+    });
+    mockGameCacheService.getRemainingSeconds.mockImplementation(
+      async function (id) {
+        return this._seconds.get(id) ?? 0;
+      },
+    );
+    mockGameCacheService.getActiveQuestionData.mockImplementation(
+      async function (id) {
+        return this._data.get(id);
+      },
+    );
+    mockGameCacheService.getStatus.mockImplementation(async function (id) {
+      return this._statuses.get(id);
+    });
   });
 
   describe('startGame', () => {
@@ -121,94 +173,87 @@ describe('GameEngineService', () => {
     });
   });
 
-  describe('startQuestionCycle', () => {
-    it('should start cycle with durations from database', async () => {
+  describe('prepareQuestion', () => {
+    it('should set phase to PREPARATION and notify without starting timer', async () => {
       const gameId = 1;
       const questionId = 101;
+      const questionNumber = 5;
 
-      mockGameCacheService.getStatus.mockResolvedValue(GameStatus.LIVE);
+      mockGameCacheService._statuses.set(gameId, GameStatus.LIVE);
       mockGameRepository.getQuestionSettings.mockResolvedValue({
-        timeToThink: 45,
-        timeToAnswer: 15,
-        gameId: 1,
-        questionNumber: 1,
+        timeToThink: 60,
+        questionNumber,
+        gameId,
       });
 
-      await service.startQuestionCycle(
-        gameId,
-        questionId,
-        jest.fn(),
-        jest.fn(),
-      );
+      const onTick = jest.fn();
+      await service.prepareQuestion(gameId, questionId, onTick, jest.fn());
 
-      expect(mockGameCacheService.setRemainingSeconds).toHaveBeenCalledWith(
-        gameId,
-        45,
+      expect(mockGameCacheService._phases.get(gameId)).toBe(
+        GamePhase.PREPARATION,
       );
+      expect(onTick).toHaveBeenCalledWith(gameId, 0, GamePhase.PREPARATION, {
+        questionId,
+        questionNumber,
+      });
+    });
+  });
+
+  describe('startQuestionCycle', () => {
+    it('should start THINKING phase only if currently in PREPARATION', async () => {
+      const gameId = 1;
+      mockGameCacheService.getPhase.mockResolvedValue(GamePhase.PREPARATION);
+      mockGameCacheService.getActiveQuestionData.mockResolvedValue({
+        questionId: 101,
+        questionNumber: 5,
+      });
+      mockGameRepository.getQuestionSettings.mockResolvedValue({
+        timeToThink: 45,
+      });
+
+      await service.startQuestionCycle(gameId);
+
       expect(mockGameCacheService.setPhase).toHaveBeenCalledWith(
         gameId,
         GamePhase.THINKING,
       );
+      expect(mockGameCacheService.setRemainingSeconds).toHaveBeenCalledWith(
+        gameId,
+        45,
+      );
+      expect(mockGameCacheService.setTimer).toHaveBeenCalled();
     });
 
-    it('should throw error if game is not LIVE', async () => {
-      mockGameCacheService.getStatus.mockResolvedValue(GameStatus.DRAFT);
-
-      await expect(
-        service.startQuestionCycle(1, 101, jest.fn(), jest.fn()),
-      ).rejects.toThrow('game is in DRAFT status');
+    it('should throw error if not in PREPARATION phase', async () => {
+      mockGameCacheService.getPhase.mockResolvedValue(GamePhase.IDLE);
+      await expect(service.startQuestionCycle(1)).rejects.toThrow(
+        'only be started from PREPARATION',
+      );
     });
 
     it('should transition through THINKING -> ANSWERING -> IDLE correctly', async () => {
       jest.useFakeTimers();
       const gameId = 1;
       const questionId = 101;
-      const questionNumber = 1;
+      const qData = { questionId, questionNumber: 1 };
 
-      const qData = {
-        questionId,
-        questionNumber,
-      };
+      mockGameCacheService._statuses.set(gameId, GameStatus.LIVE);
+      mockGameCacheService._phases.set(gameId, GamePhase.PREPARATION);
+      mockGameCacheService._data.set(gameId, qData);
 
-      let seconds = 60;
-      let currentPhase = GamePhase.IDLE;
-      let activeQData: QuestionData | null = null;
-
-      mockGameCacheService.getStatus.mockResolvedValue(GameStatus.LIVE);
       mockGameRepository.getQuestionSettings.mockResolvedValue({
         timeToThink: 60,
         timeToAnswer: 10,
         gameId,
-        questionNumber: questionNumber,
+        questionNumber: 1,
       });
-
-      mockGameCacheService.getRemainingSeconds.mockImplementation(
-        async () => seconds,
-      );
-      mockGameCacheService.setRemainingSeconds.mockImplementation(
-        async (id, val) => {
-          seconds = val;
-        },
-      );
-      mockGameCacheService.getPhase.mockImplementation(
-        async () => currentPhase,
-      );
-      mockGameCacheService.setPhase.mockImplementation(async (id, p) => {
-        currentPhase = p;
-      });
-      mockGameCacheService.getActiveQuestionData.mockImplementation(
-        async () => activeQData,
-      );
-      mockGameCacheService.setActiveQuestionData.mockImplementation(
-        async (id, qData) => {
-          activeQData = qData;
-        },
-      );
 
       const onTick = jest.fn();
-      await service.startQuestionCycle(gameId, questionId, onTick, jest.fn());
+      mockGameCacheService.setCallbacks(gameId, onTick, jest.fn());
 
-      expect(currentPhase).toBe(GamePhase.THINKING);
+      await service.startQuestionCycle(gameId);
+
+      expect(mockGameCacheService._phases.get(gameId)).toBe(GamePhase.THINKING);
       expect(onTick).toHaveBeenCalledWith(
         gameId,
         60,
@@ -218,13 +263,16 @@ describe('GameEngineService', () => {
 
       onTick.mockClear();
 
-      seconds = 0;
+      mockGameCacheService._seconds.set(gameId, 0);
       jest.advanceTimersByTime(1000);
 
-      for (let i = 0; i < 15; i++) {
+      for (let i = 0; i < 20; i++) {
         await Promise.resolve();
       }
-      expect(currentPhase).toBe(GamePhase.ANSWERING);
+
+      expect(mockGameCacheService._phases.get(gameId)).toBe(
+        GamePhase.ANSWERING,
+      );
       expect(onTick).toHaveBeenCalledWith(
         gameId,
         10,
@@ -239,20 +287,38 @@ describe('GameEngineService', () => {
   describe('startNextQuestion (Game Flow)', () => {
     it('should start the next question if it exists', async () => {
       const gameId = 1;
+      const nextQuestionId = 102;
+
+      mockGameCacheService._statuses.set(gameId, GameStatus.LIVE);
+
       mockGameCacheService.getActiveQuestionData.mockResolvedValue({
         questionId: 101,
         questionNumber: 1,
       });
+
       mockGameRepository.getOrderedQuestionIds.mockResolvedValue([
-        101, 102, 103,
+        101,
+        nextQuestionId,
+        103,
       ]);
+
+      mockGameRepository.getQuestionSettings.mockResolvedValue({
+        timeToThink: 60,
+        questionNumber: 2,
+        gameId: gameId,
+      });
 
       const result = await service.startNextQuestion(gameId, jest.fn());
 
-      expect(result).toBe(102);
+      expect(result).toBe(nextQuestionId);
+
       expect(mockGameRepository.activateQuestion).toHaveBeenCalledWith(
         gameId,
-        102,
+        nextQuestionId,
+      );
+
+      expect(mockGameCacheService._phases.get(gameId)).toBe(
+        GamePhase.PREPARATION,
       );
     });
 

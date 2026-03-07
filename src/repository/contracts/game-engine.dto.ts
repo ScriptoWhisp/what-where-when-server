@@ -1,5 +1,6 @@
 export enum GamePhase {
   IDLE = 'IDLE',
+  PREPARATION = 'PREPARATION',
   THINKING = 'THINKING',
   ANSWERING = 'ANSWERING',
 }

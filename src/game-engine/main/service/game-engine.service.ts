@@ -24,7 +24,7 @@ export class GameEngineService {
   public async stopQuestion(gameId: GameId) {
     const status = await this.cache.getStatus(gameId);
     if (status !== GameStatus.LIVE) {
-      this.logger.warn('Status of the game is not LIVE to stop question')
+      this.logger.warn('Status of the game is not LIVE to stop question');
       return;
     }
 
@@ -133,7 +133,7 @@ export class GameEngineService {
       return null;
     }
 
-    await this.startQuestionCycle(gameId, nextQuestionId, onTick, () => {});
+    await this.prepareQuestion(gameId, nextQuestionId, onTick, () => {});
     return nextQuestionId;
   }
 
@@ -236,7 +236,7 @@ export class GameEngineService {
     return (await this.cache.getPhase(gameId)) || GamePhase.IDLE;
   }
 
-  async startQuestionCycle(
+  async prepareQuestion(
     gameId: GameId,
     questionId: number,
     onTick: (
@@ -269,19 +269,35 @@ export class GameEngineService {
 
       this.cache.setCallbacks(gameId, onTick, onPhaseChange);
 
-      await this.transitionToPhase(
-        gameId,
-        GamePhase.THINKING,
-        questionSettings.timeToThink,
-      );
+      await this.cache.setPhase(gameId, GamePhase.PREPARATION);
+      await this.cache.setRemainingSeconds(gameId, 0);
 
-      this.logger.log(`Started question ${questionId} for game ${gameId}`);
+      await this.notifyTick(gameId);
+      this.logger.log(`Question ${questionId} prepared for game ${gameId}`);
     } catch (e) {
-      this.logger.error(
-        `Error starting cycle for game ${gameId}: ${e.message}`,
-      );
+      this.logger.error(`Error preparing question: ${e.message}`);
       throw e;
     }
+  }
+
+  async startQuestionCycle(gameId: GameId) {
+    const phase = await this.getPhase(gameId);
+    if (phase !== GamePhase.PREPARATION) {
+      throw new Error('Timer can only be started from PREPARATION phase');
+    }
+
+    const qData = await this.cache.getActiveQuestionData(gameId);
+    if (!qData) throw new Error('No active question data');
+
+    const settings = await this.gameRepository.getQuestionSettings(
+      qData.questionId,
+    );
+
+    await this.transitionToPhase(
+      gameId,
+      GamePhase.THINKING,
+      settings!.timeToThink,
+    );
   }
 
   async processAnswer(data: SubmitAnswerDto): Promise<AnswerDomain | null> {

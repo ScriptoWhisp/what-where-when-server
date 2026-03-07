@@ -78,8 +78,8 @@ async function seedTestData() {
     data: {
       hostId: host.id,
       name: 'Championship Test Game',
-      passcode: 111222,
-      status: 'PREPARING',
+      passcode: 1122,
+      status: 'DRAFT',
       date: new Date(),
     },
   });
