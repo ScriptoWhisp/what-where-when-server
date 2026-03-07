@@ -31,6 +31,7 @@ describe('GameEngineService', () => {
     updateQuestionDeadline: jest.fn(),
     findActiveQuestionData: jest.fn(),
     getQuestionDeadline: jest.fn(),
+    getParticipantAnswerHistory: jest.fn(),
   };
 
   const mockGameCacheService = {
@@ -362,6 +363,10 @@ describe('GameEngineService', () => {
       mockGameRepository.getLeaderboard.mockResolvedValue([
         { teamName: 'A', score: 1 },
       ]);
+      mockGameRepository.judgeAnswer.mockResolvedValue([
+        { participantId: 12, socketId: 1111 },
+      ]);
+      mockGameRepository.getParticipantAnswerHistory.mockResolvedValue([]);
 
       const result = await service.judgeAnswer(1, 10, 'CORRECT', 99);
       expect(result.leaderboard[0].score).toBe(1);

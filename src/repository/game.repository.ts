@@ -226,10 +226,15 @@ export class GameRepository {
     return this.prisma.$transaction(async (tx) => {
       const current = await tx.answer.findUniqueOrThrow({
         where: { id: answerId },
+        include: { participant: true },
       });
       const updated = await tx.answer.update({
         where: { id: answerId },
         data: { statusId: newStatusId },
+        include: {
+          participant: { include: { team: true } },
+          status: true,
+        },
       });
       await tx.answerStatusHistory.create({
         data: {
@@ -239,7 +244,10 @@ export class GameRepository {
           changedById: adminId,
         },
       });
-      return updated;
+      return {
+        socketId: current.participant.socketId,
+        gameParticipantId: updated.gameParticipantId,
+      }
     });
   }
 
@@ -327,5 +335,26 @@ export class GameRepository {
       },
     });
     return question?.questionDeadline?.getTime();
+  }
+
+  async getParticipantAnswerHistory(
+    participantId: number,
+  ): Promise<AnswerDomain[]> {
+    const answers = await this.prisma.answer.findMany({
+      where: { gameParticipantId: participantId },
+      include: {
+        question: {
+          select: {
+            text: true,
+            questionNumber: true,
+            answer: true,
+          },
+        },
+        status: true,
+      },
+      orderBy: { question: { questionNumber: 'asc' } },
+    });
+
+    return answers.map(a => AnswerMapper.toDomain(a));
   }
 }
