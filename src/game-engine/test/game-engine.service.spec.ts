@@ -545,9 +545,8 @@ describe('GameEngineService', () => {
   describe('Timer & Status Management', () => {
     it('should pause the timer and notify subscribers', async () => {
       const gameId = 1;
-      const intervalId = setInterval(() => {}, 1000);
 
-      mockGameCacheService.getTimer.mockReturnValue(intervalId);
+      mockGameCacheService.getTimer.mockReturnValue(dummyTimer);
       mockGameCacheService.getRemainingSeconds.mockResolvedValue(30);
       mockGameCacheService.getPhase.mockResolvedValue(GamePhase.THINKING);
 
@@ -573,9 +572,7 @@ describe('GameEngineService', () => {
       const gameId = 1;
       mockGameCacheService.getPhase.mockResolvedValue(GamePhase.THINKING);
       mockGameCacheService.getRemainingSeconds.mockResolvedValue(5);
-      mockGameCacheService.getTimer.mockReturnValue(
-        setInterval(() => {}, 1000)
-      );
+      mockGameCacheService.getTimer.mockReturnValue(dummyTimer);
 
       await service.adjustTime(gameId, -10);
 
@@ -589,9 +586,7 @@ describe('GameEngineService', () => {
     it('should finish game and cleanup resources', async () => {
       const gameId = 1;
       mockGameCacheService.getStatus.mockResolvedValue(GameStatus.LIVE);
-      mockGameCacheService.getTimer.mockReturnValue(
-        setInterval(() => {}, 1000)
-      );
+      mockGameCacheService.getTimer.mockReturnValue(dummyTimer);
 
       await service.finishGame(gameId);
 
@@ -613,9 +608,7 @@ describe('GameEngineService', () => {
       mockGameCacheService.getPhaseChangeCallback.mockReturnValue(
         mockOnPhaseChange,
       );
-      mockGameCacheService.getTimer.mockReturnValue(
-        setInterval(() => {}, 1000),
-      );
+      mockGameCacheService.getTimer.mockReturnValue(dummyTimer);
 
       await service.stopQuestion(gameId);
 
