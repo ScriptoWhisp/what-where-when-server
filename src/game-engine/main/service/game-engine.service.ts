@@ -5,6 +5,7 @@ import {
   GamePhase,
   GameState,
   GameStatus,
+  LeaderboardEntry,
   ParticipantDomain,
   QuestionData,
   SubmitAnswerDto,
@@ -20,6 +21,10 @@ export class GameEngineService {
     private readonly gameRepository: GameRepository,
     private readonly cache: GameCacheService,
   ) {}
+
+  public async getLeaderboard(gameId: GameId) {
+    return this.gameRepository.getLeaderboard(gameId);
+  }
 
   public async stopQuestion(gameId: GameId) {
     const status = await this.cache.getStatus(gameId);
@@ -81,7 +86,7 @@ export class GameEngineService {
 
     const [updatedAnswer, leaderboard] = await Promise.all([
       this.gameRepository.getAnswerById(answerId),
-      this.gameRepository.getLeaderboard(gameId),
+      this.getLeaderboard(gameId),
     ]);
 
     return { updatedAnswer, leaderboard };
@@ -93,14 +98,19 @@ export class GameEngineService {
     verdict: string,
     adminId: number,
   ) {
-    await this.gameRepository.judgeAnswer(answerId, verdict, adminId);
+    const updatedData = await this.gameRepository.judgeAnswer(
+      answerId,
+      verdict,
+      adminId,
+    );
 
-    const [updatedAnswer, leaderboard] = await Promise.all([
+    const [updatedAnswer, leaderboard, history] = await Promise.all([
       this.gameRepository.getAnswerById(answerId),
-      this.gameRepository.getLeaderboard(gameId),
+      this.getLeaderboard(gameId),
+      this.gameRepository.getParticipantAnswerHistory(updatedData.gameParticipantId)
     ]);
 
-    return { updatedAnswer, leaderboard };
+    return { updatedAnswer, leaderboard, history, socketId: updatedData.socketId};
   }
 
   async startNextQuestion(
@@ -199,16 +209,19 @@ export class GameEngineService {
     state: GameState;
     answers: AnswerDomain[];
     participants: ParticipantDomain[];
+    leaderboard: LeaderboardEntry[]
   }> {
-    const [answers, state, participants] = await Promise.all([
+    const [answers, state, participants, leaderboard] = await Promise.all([
       this.gameRepository.getAnswersByGame(gameId),
       this.getGameState(gameId),
       this.gameRepository.getParticipantsByGame(gameId),
+      this.gameRepository.getLeaderboard(gameId),
     ]);
     return {
       state,
       answers,
       participants,
+      leaderboard
     };
   }
 
@@ -307,7 +320,7 @@ export class GameEngineService {
     await this.cache.setPhaseEnd(gameId, questionDeadline);
     await this.updateQuestionEnd(qData.questionId, questionDeadline);
 
-      await this.transitionToPhase(
+    await this.transitionToPhase(
       gameId,
       GamePhase.THINKING,
       settings.timeToThink,
@@ -318,7 +331,9 @@ export class GameEngineService {
     const status = await this.cache.getStatus(data.gameId);
 
     if (status !== GameStatus.LIVE) {
-      this.logger.warn(`Answer must rejected: game ${data.gameId} is ${status}`);
+      this.logger.warn(
+        `Answer must rejected: game ${data.gameId} is ${status}`,
+      );
     }
 
     try {
@@ -423,7 +438,7 @@ export class GameEngineService {
     gameId: GameId,
     phase: GamePhase,
     seconds: number,
-    deadlineOverride?: number
+    deadlineOverride?: number,
   ) {
     const deadline = deadlineOverride ?? Date.now() + seconds * 1000;
 
@@ -461,13 +476,15 @@ export class GameEngineService {
         questionId!,
       );
 
-      const finalDeadline = questionId ? await this.cache.getQuestionDeadline(questionId) : undefined;
+      const finalDeadline = questionId
+        ? await this.cache.getQuestionDeadline(questionId)
+        : undefined;
 
       await this.transitionToPhase(
         gameId,
         GamePhase.ANSWERING,
         questionSettings?.timeToAnswer ?? 10,
-        finalDeadline
+        finalDeadline,
       );
     }
   }
@@ -507,11 +524,18 @@ export class GameEngineService {
     return Math.max(0, diff);
   }
 
-  private async updateQuestionEnd(questionId: number, questionDeadline: number) {
+  private async updateQuestionEnd(
+    questionId: number,
+    questionDeadline: number,
+  ) {
     await this.cache.setQuestionDeadline(questionId, questionDeadline);
     await this.gameRepository.updateQuestionDeadline(
       questionId,
       new Date(questionDeadline),
     );
+  }
+
+  async getTeamHistory(participantId: number): Promise<AnswerDomain[]> {
+    return this.gameRepository.getParticipantAnswerHistory(participantId);
   }
 }

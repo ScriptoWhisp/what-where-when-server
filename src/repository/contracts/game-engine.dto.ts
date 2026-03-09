@@ -91,6 +91,7 @@ export interface ParticipantDomain {
 export interface AnswerDomain {
   id: number;
   questionId: number;
+  questionNumber?: number;
   participantId: number;
   teamName: string;
   answerText: string;
@@ -104,4 +105,12 @@ export interface QuestionSettings {
   timeToAnswer: number;
   questionNumber: number;
   gameId: number;
+}
+
+export interface LeaderboardEntry {
+  participantId: number;
+  teamName: string;
+  categoryId: number;
+  categoryName?: string | null;
+  score: number;
 }
