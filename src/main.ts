@@ -6,8 +6,12 @@ import { join } from 'node:path';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.useStaticAssets(join(process.cwd(), 'public'));
+  const origin = ['http://localhost:8081'];
+  if (process.env.CLIENT_PUBLIC_API_URL) {
+    origin.push(process.env.CLIENT_PUBLIC_API_URL);
+  }
   app.enableCors({
-    origin: ['http://localhost:8081'],
+    origin: origin,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
