@@ -87,7 +87,8 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
 
   constructor(private readonly gameService: GameEngineService) {}
 
-  afterInit(server: Server) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  afterInit(_server: Server) {
     this.leaderboardUpdate$
       .pipe(debounceTime(500))
       .subscribe(async (gameId) => {
