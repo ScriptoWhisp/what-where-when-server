@@ -93,7 +93,7 @@ export class HostGameRepository {
           data: {
             gameId: game.id,
             teamId: team.id,
-            categoryId: ownedCategories[0].id,
+            categoryId: team.categoryId ?? ownedCategories[0].id,
             isAvailable: true,
           },
         });
