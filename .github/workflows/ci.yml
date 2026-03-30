@@ -114,7 +114,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
-            cd /var/www/what-where-when-server
+            cd what-where-when-server
             
             git pull origin main
             
