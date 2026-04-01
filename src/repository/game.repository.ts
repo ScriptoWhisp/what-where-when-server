@@ -382,4 +382,61 @@ export class GameRepository {
 
     return answers.map((a) => AnswerMapper.toDomain(a));
   }
+
+  async getGameExportParticipants(gameId: number): Promise<GameExportParticipant[]> {
+    const rows = await this.prisma.gameParticipant.findMany({
+      where: { gameId },
+      include: { team: true, category: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((r) => ({
+      participantId: r.id,
+      teamName: r.team.name,
+      teamCode: r.team.teamCode,
+      categoryId: r.categoryId,
+      categoryName: r.category.name,
+    }));
+  }
+
+  async getGameExportQuestionColumns(
+    gameId: number,
+  ): Promise<GameExportQuestionCol[]> {
+    const rounds = await this.prisma.round.findMany({
+      where: { gameId },
+      orderBy: { roundNumber: 'asc' },
+      include: {
+        questions: {
+          orderBy: { questionNumber: 'asc' },
+          select: { id: true },
+        },
+      },
+    });
+    const cols: GameExportQuestionCol[] = [];
+    let globalIndex = 0;
+    for (const round of rounds) {
+      for (const q of round.questions) {
+        globalIndex++;
+        cols.push({
+          questionId: q.id,
+          roundNumber: round.roundNumber,
+          globalIndex,
+        });
+      }
+    }
+    return cols;
+  }
+}
+
+export interface GameExportParticipant {
+  participantId: number;
+  teamName: string;
+  teamCode: string;
+  categoryId: number;
+  categoryName: string;
+}
+
+export interface GameExportQuestionCol {
+  questionId: number;
+  roundNumber: number;
+  globalIndex: number;
 }
