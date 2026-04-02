@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { GameId } from '../../../repository/contracts/common.dto';
 import {
   AnswerDomain,
@@ -13,15 +13,25 @@ import {
 } from '../../../repository/contracts/game-engine.dto';
 import { GameRepository } from '../../../repository/game.repository';
 import { GameCacheService } from './game-cache.service';
+import { JudgingNotAllowedError } from '../errors/judging-not-allowed.error';
 
 @Injectable()
-export class GameEngineService {
+export class GameEngineService implements OnModuleInit {
   private readonly logger = new Logger(GameEngineService.name);
 
   constructor(
     private readonly gameRepository: GameRepository,
     private readonly cache: GameCacheService,
   ) {}
+
+  async onModuleInit() {
+    const cleared = await this.gameRepository.clearAllParticipantSockets();
+    if (cleared > 0) {
+      this.logger.log(
+        `Reset ${cleared} participant socket binding(s) after server start (stale connections)`,
+      );
+    }
+  }
 
   public async getLeaderboard(gameId: GameId): Promise<LeaderboardEntry[]> {
     const [allParticipants, allAnswers] = await Promise.all([
@@ -105,8 +115,17 @@ export class GameEngineService {
   }
 
   public async disconnectParticipant(socketId: string) {
-    await this.gameRepository.setParticipantDisconnected(socketId);
+    const gameId = await this.gameRepository.setParticipantDisconnected(socketId);
     this.logger.log(`Client disconnected: ${socketId}`);
+
+    if (!gameId) return null;
+
+    const participants = await this.gameRepository.getParticipantsByGame(gameId);
+
+    return {
+      gameId,
+      participants,
+    };
   }
 
   async finishGame(gameId: GameId): Promise<GameStatus> {
@@ -153,6 +172,24 @@ export class GameEngineService {
     verdict: string,
     adminId: number,
   ) {
+    const answer = await this.gameRepository.getAnswerByIdForGame(
+      answerId,
+      gameId,
+    );
+
+    const phase = await this.getPhase(gameId);
+    const qData = await this.cache.getActiveQuestionData(gameId);
+    const activeQuestionId = qData?.questionId ?? null;
+
+    const questionStillLive =
+      (phase === GamePhase.THINKING || phase === GamePhase.ANSWERING) &&
+      activeQuestionId !== null &&
+      activeQuestionId === answer.questionId;
+
+    if (questionStillLive) {
+      throw new JudgingNotAllowedError();
+    }
+
     const updatedData = await this.gameRepository.judgeAnswer(
       answerId,
       verdict,
@@ -160,11 +197,13 @@ export class GameEngineService {
     );
 
     const [updatedAnswer, history] = await Promise.all([
-      this.gameRepository.getAnswerById(answerId),
-      this.gameRepository.getParticipantAnswerHistory(updatedData.gameParticipantId)
+      this.gameRepository.getAnswerByIdForGame(answerId, gameId),
+      this.gameRepository.getParticipantAnswerHistory(
+        updatedData.gameParticipantId,
+      ),
     ]);
 
-    return { updatedAnswer, history, socketId: updatedData.socketId};
+    return { updatedAnswer, history, socketId: updatedData.socketId };
   }
 
   async startNextQuestion(
