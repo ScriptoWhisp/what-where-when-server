@@ -119,7 +119,7 @@ jobs:
             cd /root/what-where-when-server
             git pull origin main
             export NODE_OPTIONS="--max-old-space-size=2560"
-            docker compose up -d db
+            docker compose up -d db redis
             
             npm install
             npm run build
@@ -129,5 +129,10 @@ jobs:
             
             pm2 restart what-where-when --node-args="--max-old-space-size=2560" || \
             pm2 start dist/src/main.js --name "what-where-when" --node-args="--max-old-space-size=2560"
+            
+            # Monitoring stack (Prometheus + Grafana + exporters)
+            export WWW_DOCKER_NETWORK="what-where-when-server_default"
+            export PROMETHEUS_CONFIG="./monitoring/prometheus/prometheus.hetzner.yml"
+            docker compose -f docker-compose.monitoring.yml up -d
             
             pm2 save

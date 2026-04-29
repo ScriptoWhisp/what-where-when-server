@@ -1,0 +1,37 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  # NestJS app metrics. When the app runs on the host (npm start:dev),
+  # Prometheus must access it via host.docker.internal on macOS.
+  # On Linux/Hetzner you can either:
+  #   - run the app in Docker and add a "server" target, or
+  #   - keep it on the host and replace host.docker.internal with the host IP.
+  - job_name: "server"
+    metrics_path: /metrics
+    static_configs:
+      - targets:
+          - "host.docker.internal:3000"
+
+  - job_name: "grafana"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["grafana:3000"]
+
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  - job_name: "node"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
