@@ -1,0 +1,92 @@
+{
+  "uid": "www-server-host",
+  "title": "What Where When — Server & Host",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "tags": ["server", "node", "mvp"],
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "HTTP RPS (all routes)",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(http_requests_total[1m]))", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP p95 latency (s)",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP req/min (all routes)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "sum(increase(http_requests_total[1m]))", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP avg latency (s)",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 6 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_request_duration_seconds_sum[1m])) / sum(rate(http_request_duration_seconds_count[1m]))",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Node.js heap used (bytes)",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "nodejs_heap_size_used_bytes", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Node.js event loop lag (s)",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "nodejs_eventloop_lag_seconds", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Host CPU (node_exporter, %)",
+      "gridPos": { "x": 0, "y": 22, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Host memory used (bytes)",
+      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    }
+  ]
+}
+

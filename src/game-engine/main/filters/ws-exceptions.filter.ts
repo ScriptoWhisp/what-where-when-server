@@ -7,6 +7,7 @@ import {
 import { WsException } from '@nestjs/websockets';
 import { Socket } from 'socket.io';
 import { JudgingNotAllowedError } from '../errors/judging-not-allowed.error';
+import { wsErrorsTotal } from '../../../monitoring/metrics';
 
 interface ClientErrorPayload {
   message: string;
@@ -27,20 +28,33 @@ export class WsExceptionsFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const ctx = host.switchToWs();
     const client = ctx.getClient<Socket>();
+    const event = (ctx.getPattern && ctx.getPattern()) || 'unknown';
 
     const payload = this.toClientPayload(exception);
 
     this.logger.error(
-      `WS exception on event "${(ctx.getPattern && ctx.getPattern()) || 'unknown'}" for socket ${client?.id}: ${
+      `WS exception on event "${event}" for socket ${client?.id}: ${
         exception instanceof Error ? exception.stack || exception.message : String(exception)
       }`,
     );
+
+    if (this.isUnexpected(exception)) {
+      wsErrorsTotal.labels(String(event), 'unexpected').inc(1);
+    } else {
+      wsErrorsTotal.labels(String(event), 'expected').inc(1);
+    }
 
     try {
       client?.emit('error', payload);
     } catch {
       // socket may already be closed; nothing more we can do
     }
+  }
+
+  private isUnexpected(exception: unknown): boolean {
+    if (exception instanceof WsException) return false;
+    if (exception instanceof JudgingNotAllowedError) return false;
+    return true;
   }
 
   private toClientPayload(exception: unknown): ClientErrorPayload {

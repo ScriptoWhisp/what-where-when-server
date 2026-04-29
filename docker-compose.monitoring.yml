@@ -1,0 +1,83 @@
+name: what-where-when-monitoring
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    ports:
+      - "9090:9090"
+    volumes:
+      # Default: local dev config. On Hetzner set PROMETHEUS_CONFIG=./monitoring/prometheus/prometheus.hetzner.yml
+      - ${PROMETHEUS_CONFIG:-./monitoring/prometheus/prometheus.yml}:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - app-net
+
+  grafana:
+    image: grafana/grafana:11.6.1
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - app-net
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    environment:
+      # Uses the same credentials as docker-compose.yml (www/www).
+      DATA_SOURCE_NAME: "postgresql://www:www@db:5432/www?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      - prometheus
+    networks:
+      - app-net
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.70.0
+    environment:
+      REDIS_ADDR: "redis://redis:6379"
+    ports:
+      - "9121:9121"
+    depends_on:
+      - prometheus
+    networks:
+      - app-net
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    ports:
+      - "9100:9100"
+    # On Linux this provides host metrics. On macOS Docker Desktop, this
+    # reports the Linux VM/container environment, but is still useful as
+    # a coarse saturation signal.
+    networks:
+      - app-net
+
+volumes:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  app-net:
+    # Must match the network that your db/redis live in.
+    # Default (when you run `docker compose up -d` in THIS repo):
+    #   what-where-when-server-org_default
+    # Override if needed:
+    #   WWW_DOCKER_NETWORK=what-where-when-server_default docker compose -f docker-compose.monitoring.yml up -d
+    name: ${WWW_DOCKER_NETWORK:-what-where-when-server-org_default}
+    external: true
+

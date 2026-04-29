@@ -1,0 +1,63 @@
+{
+  "uid": "www-redis",
+  "title": "What Where When — Redis",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "tags": ["redis", "cache", "mvp"],
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Commands / sec (ops/sec)",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(redis_commands_processed_total[1m])", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Connected clients",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "redis_connected_clients", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory used (bytes)",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "redis_memory_used_bytes", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
+    },
+    {
+      "type": "timeseries",
+      "title": "Keyspace hits vs misses",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(redis_keyspace_hits_total[1m])", "refId": "A" },
+        { "expr": "rate(redis_keyspace_misses_total[1m])", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Evictions / sec",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(redis_evicted_keys_total[5m])", "refId": "A" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Expired keys / sec",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(redis_expired_keys_total[5m])", "refId": "A" }
+      ]
+    }
+  ]
+}
+
