@@ -106,6 +106,12 @@ describe('GameEngineService', () => {
     setQuestionDeadline: jest.fn(async (id, t) => {
       mockGameCacheService._questionDeadlines.set(id, t);
     }),
+    purgeGame: jest.fn(async (id) => {
+      mockGameCacheService._phases.delete(id);
+      mockGameCacheService._data.delete(id);
+      mockGameCacheService._phaseEnds.delete(id);
+      mockGameCacheService._pausedSeconds.delete(id);
+    }),
   };
 
   beforeEach(async () => {
@@ -239,7 +245,7 @@ describe('GameEngineService', () => {
       });
       mockGameCacheService._statuses.set(1, GameStatus.LIVE);
 
-      const result = await service.startNextQuestion(1, jest.fn());
+      const result = await service.startNextQuestion(1, jest.fn(), jest.fn());
       expect(result).toBe(102);
       expect(mockGameRepository.activateQuestion).toHaveBeenCalledWith(1, 102);
     });
@@ -336,6 +342,8 @@ describe('GameEngineService', () => {
       const qDeadline = 1000000;
       const clientTime = 1003000; // 3 сек опоздания
       mockGameCacheService._statuses.set(1, GameStatus.LIVE);
+      mockGameCacheService._phases.set(1, GamePhase.ANSWERING);
+      mockGameCacheService._data.set(1, { questionId: 101, questionNumber: 1 });
       mockGameCacheService._questionDeadlines.set(101, qDeadline);
 
       const dto = {
@@ -358,6 +366,8 @@ describe('GameEngineService', () => {
 
     it('processAnswer: should handle invalid dates by falling back to server time', async () => {
       mockGameCacheService._statuses.set(1, GameStatus.LIVE);
+      mockGameCacheService._phases.set(1, GamePhase.THINKING);
+      mockGameCacheService._data.set(1, { questionId: 101, questionNumber: 1 });
       const dto = {
         gameId: 1,
         participantId: 5,
@@ -374,6 +384,57 @@ describe('GameEngineService', () => {
         expect.any(Date),
         undefined,
       );
+    });
+
+    it('processAnswer: should reject when game is not LIVE', async () => {
+      mockGameCacheService._statuses.set(1, GameStatus.DRAFT);
+      mockGameCacheService._phases.set(1, GamePhase.THINKING);
+      mockGameCacheService._data.set(1, { questionId: 101, questionNumber: 1 });
+      const dto = {
+        gameId: 1,
+        participantId: 5,
+        questionId: 101,
+        answer: 'test',
+        submittedAt: new Date().toISOString(),
+      };
+
+      const result = await service.processAnswer(dto);
+      expect(result).toBeNull();
+      expect(mockGameRepository.saveAnswer).not.toHaveBeenCalled();
+    });
+
+    it('processAnswer: should reject when phase is IDLE', async () => {
+      mockGameCacheService._statuses.set(1, GameStatus.LIVE);
+      mockGameCacheService._phases.set(1, GamePhase.IDLE);
+      mockGameCacheService._data.set(1, { questionId: 101, questionNumber: 1 });
+      const dto = {
+        gameId: 1,
+        participantId: 5,
+        questionId: 101,
+        answer: 'test',
+        submittedAt: new Date().toISOString(),
+      };
+
+      const result = await service.processAnswer(dto);
+      expect(result).toBeNull();
+      expect(mockGameRepository.saveAnswer).not.toHaveBeenCalled();
+    });
+
+    it('processAnswer: should reject when questionId does not match active question', async () => {
+      mockGameCacheService._statuses.set(1, GameStatus.LIVE);
+      mockGameCacheService._phases.set(1, GamePhase.ANSWERING);
+      mockGameCacheService._data.set(1, { questionId: 999, questionNumber: 1 });
+      const dto = {
+        gameId: 1,
+        participantId: 5,
+        questionId: 101,
+        answer: 'test',
+        submittedAt: new Date().toISOString(),
+      };
+
+      const result = await service.processAnswer(dto);
+      expect(result).toBeNull();
+      expect(mockGameRepository.saveAnswer).not.toHaveBeenCalled();
     });
 
     it('judgeAnswer: should return updated answer and leaderboard', async () => {

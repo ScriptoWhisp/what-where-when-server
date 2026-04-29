@@ -230,4 +230,27 @@ export class GameCacheService {
     this.tickCallbacks.delete(gameId);
     this.phaseChangeCallbacks.delete(gameId);
   }
+
+  /**
+   * Removes all Redis keys related to a game and clears in-memory state.
+   * Should be called when a game enters a terminal state (FINISHED) so
+   * that stale entries don't accumulate in Redis.
+   *
+   * Question-level deadline keys auto-expire via TTL, so we only sweep
+   * `game:{id}:*` here.
+   */
+  public async purgeGame(gameId: GameId): Promise<void> {
+    this.clearTimer(gameId);
+    this.removeCallbacks(gameId);
+
+    const pattern = `game:${gameId}:*`;
+    const stream = this.redis.scanStream({ match: pattern, count: 100 });
+    const keys: string[] = [];
+    for await (const batch of stream as AsyncIterable<string[]>) {
+      for (const key of batch) keys.push(key);
+    }
+    if (keys.length > 0) {
+      await this.redis.del(...keys);
+    }
+  }
 }

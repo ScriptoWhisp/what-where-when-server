@@ -1,4 +1,4 @@
-import { UseGuards, Logger } from '@nestjs/common';
+import { UseGuards, Logger, UseFilters } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -12,7 +12,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { GameEngineService } from '../service/game-engine.service';
 import { WsJwtGuard } from '../guards/ws-jwt.guard';
-import { JudgingNotAllowedError } from '../errors/judging-not-allowed.error';
+import { WsExceptionsFilter } from '../filters/ws-exceptions.filter';
 import type {
   AdjustTimeDto,
   DisputeDto,
@@ -22,7 +22,8 @@ import type {
   SubmitAnswerDto,
 } from '../../../repository/contracts/game-engine.dto';
 import { GameId } from '../../../repository/contracts/common.dto';
-import { debounceTime, Subject } from 'rxjs';
+import { debounceTime, groupBy, mergeMap, Subject } from 'rxjs';
+import { getAllowedOrigins, isOriginAllowed } from '../../../config/cors';
 
 /**
  * Events sent from the Host/Admin to the Server
@@ -80,7 +81,19 @@ export enum GameBroadcastEvent {
   TimerResumed = 'timer_resumed',
 }
 
-@WebSocketGateway({ cors: { origin: '*' }, namespace: 'game' })
+@UseFilters(WsExceptionsFilter)
+@WebSocketGateway({
+  cors: {
+    origin: (
+      requestOrigin: string | undefined,
+      cb: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      cb(null, isOriginAllowed(requestOrigin, getAllowedOrigins()));
+    },
+    credentials: true,
+  },
+  namespace: 'game',
+})
 export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(GameEngineGateway.name);
@@ -91,12 +104,15 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   afterInit(_server: Server) {
     this.leaderboardUpdate$
-      .pipe(debounceTime(500))
+      .pipe(
+        groupBy((gameId) => gameId),
+        mergeMap((group$) => group$.pipe(debounceTime(500))),
+      )
       .subscribe(async (gameId) => {
         const leaderboard = await this.gameService.getLeaderboard(gameId);
         this.server
-          .to(`game_${gameId}`)
-          .emit('leaderboard_update', leaderboard);
+          .to(this.getRoom(gameId))
+          .emit(GameBroadcastEvent.LeaderboardUpdate, leaderboard);
       });
     this.logger.log('Leaderboard debouncer initialized');
   }
@@ -151,6 +167,9 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
           activeQuestionNumber: qData?.questionNumber,
         });
       },
+      (phase) => {
+        this.logger.log(`Game ${data.gameId} phase changed to ${phase}`);
+      },
     );
   }
 
@@ -203,31 +222,43 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: JoinGameDto,
   ) {
+    let config: Awaited<
+      ReturnType<GameEngineService['getGameConfigAndJoinGame']>
+    >;
     try {
-      const config = await this.gameService.getGameConfigAndJoinGame(
+      config = await this.gameService.getGameConfigAndJoinGame(
         data.gameId,
         data.teamId,
         client.id,
       );
+    } catch (e) {
+      // Surface a stable, user-friendly message for join failures.
+      const message =
+        e instanceof Error && e.message.startsWith('Cannot join')
+          ? e.message
+          : 'Cannot join game';
+      client.emit('error', { message });
+      return;
+    }
 
-      client.join(this.getRoom(data.gameId));
-      client.emit(GameBroadcastEvent.SyncState, {
-        state: config.state,
-        participantId: config.participantId,
+    client.data.participantId = config.participantId;
+    client.data.gameId = data.gameId;
+
+    client.join(this.getRoom(data.gameId));
+    client.emit(GameBroadcastEvent.SyncState, {
+      state: config.state,
+      participantId: config.participantId,
+    });
+
+    this.server
+      .to(this.getAdminRoom(data.gameId))
+      .emit(GameBroadcastEvent.SyncState, {
+        participants: config.participants,
       });
 
-      this.server
-        .to(this.getAdminRoom(data.gameId))
-        .emit(GameBroadcastEvent.SyncState, {
-          participants: config.participants,
-        });
-
-      this.logger.log(
-        `Client ${client.id} joined team ${data.teamId} in game ${data.gameId}`,
-      );
-    } catch (e) {
-      client.emit('error', { message: e.message });
-    }
+    this.logger.log(
+      `Client ${client.id} joined team ${data.teamId} in game ${data.gameId}`,
+    );
   }
 
   @UseGuards(WsJwtGuard)
@@ -271,6 +302,11 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: SubmitAnswerDto,
   ) {
+    if (!this.ensureSocketOwnsParticipant(client, data.participantId, data.gameId)) {
+      client.emit('error', { message: 'Forbidden: socket does not own this participant' });
+      return;
+    }
+
     const result = await this.gameService.processAnswer(data);
 
     if (result) {
@@ -289,30 +325,22 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
   ) {
     await this.ensureAdmin(data.gameId, client);
 
-    try {
-      const { updatedAnswer, history, socketId } =
-        await this.gameService.judgeAnswer(
-          data.gameId,
-          data.answerId,
-          data.verdict,
-          client['user'].sub,
-        );
+    const { updatedAnswer, history, socketId } =
+      await this.gameService.judgeAnswer(
+        data.gameId,
+        data.answerId,
+        data.verdict,
+        client['user'].sub,
+      );
 
-      this.server
-        .to(this.getAdminRoom(data.gameId))
-        .emit(AdminResponseEvent.AnswerUpdate, updatedAnswer);
+    this.server
+      .to(this.getAdminRoom(data.gameId))
+      .emit(AdminResponseEvent.AnswerUpdate, updatedAnswer);
 
-      this.requestLeaderboardUpdate(data.gameId);
+    this.requestLeaderboardUpdate(data.gameId);
 
-      if (socketId) {
-        this.server.to(socketId).emit(PlayerResponseEvent.HistoryUpdate, history);
-      }
-    } catch (e) {
-      if (e instanceof JudgingNotAllowedError) {
-        client.emit('error', { message: e.message, code: e.code });
-        return;
-      }
-      throw e;
+    if (socketId) {
+      this.server.to(socketId).emit(PlayerResponseEvent.HistoryUpdate, history);
     }
   }
 
@@ -321,28 +349,43 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: DisputeDto,
   ) {
-    try {
-      const { updatedAnswer, leaderboard } =
-        await this.gameService.raiseDispute(
-          data.gameId,
-          data.answerId,
-          data.comment || 'No comment provided',
-        );
-
-      this.server
-        .to(this.getAdminRoom(data.gameId))
-        .emit(AdminResponseEvent.AnswerUpdate, updatedAnswer);
-
-      this.server
-        .to(this.getAdminRoom(data.gameId))
-        .emit(AdminResponseEvent.NewDispute, { answerId: data.answerId });
-
-      this.server
-        .to(this.getRoom(data.gameId))
-        .emit(GameBroadcastEvent.LeaderboardUpdate, leaderboard);
-    } catch (e) {
-      client.emit('error', { message: e.message });
+    if (!this.ensureSocketBelongsToGame(client, data.gameId)) {
+      client.emit('error', {
+        message: 'Forbidden: socket is not part of this game',
+      });
+      return;
     }
+
+    let result: Awaited<ReturnType<GameEngineService['raiseDispute']>>;
+    try {
+      result = await this.gameService.raiseDispute(
+        data.gameId,
+        data.answerId,
+        data.comment || 'No comment provided',
+      );
+    } catch (e) {
+      const allowed = ['Game not found', 'Appeals are disabled for this game'];
+      const message =
+        e instanceof Error && allowed.includes(e.message)
+          ? e.message
+          : 'Cannot raise dispute';
+      client.emit('error', { message });
+      return;
+    }
+
+    const { updatedAnswer, leaderboard } = result;
+
+    this.server
+      .to(this.getAdminRoom(data.gameId))
+      .emit(AdminResponseEvent.AnswerUpdate, updatedAnswer);
+
+    this.server
+      .to(this.getAdminRoom(data.gameId))
+      .emit(AdminResponseEvent.NewDispute, { answerId: data.answerId });
+
+    this.server
+      .to(this.getRoom(data.gameId))
+      .emit(GameBroadcastEvent.LeaderboardUpdate, leaderboard);
   }
 
   @UseGuards(WsJwtGuard)
@@ -387,6 +430,31 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     if (!isAdmin) {
       throw new WsException('Forbidden: You are not the host of this game');
     }
+  }
+
+  /**
+   * Ensures the socket has joined the given game (via JoinGame) and that the
+   * provided participantId matches the one bound to this socket. Prevents a
+   * client from submitting answers on behalf of another team.
+   */
+  private ensureSocketOwnsParticipant(
+    client: Socket,
+    participantId: number,
+    gameId: number,
+  ): boolean {
+    const boundParticipantId = client.data?.participantId as number | undefined;
+    const boundGameId = client.data?.gameId as number | undefined;
+    return (
+      boundParticipantId !== undefined &&
+      boundGameId !== undefined &&
+      boundParticipantId === participantId &&
+      boundGameId === gameId
+    );
+  }
+
+  private ensureSocketBelongsToGame(client: Socket, gameId: number): boolean {
+    const boundGameId = client.data?.gameId as number | undefined;
+    return boundGameId !== undefined && boundGameId === gameId;
   }
 
   @UseGuards(WsJwtGuard)

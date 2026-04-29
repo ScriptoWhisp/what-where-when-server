@@ -135,6 +135,8 @@ export class GameEngineService implements OnModuleInit {
 
     try {
       await this.gameRepository.updateStatus(gameId, setStatusTo);
+
+      await this.cache.purgeGame(gameId);
       await this.cache.setStatus(gameId, setStatusTo);
 
       this.logger.log(`Game ${gameId} finalized and set to FINISHED`);
@@ -214,6 +216,7 @@ export class GameEngineService implements OnModuleInit {
       phase: GamePhase,
       qData: QuestionData | null,
     ) => void,
+    onPhaseChange: (phase: GamePhase) => void,
   ) {
     const currentQuestionData = await this.cache.getActiveQuestionData(gameId);
     const orderedIds = await this.gameRepository.getOrderedQuestionIds(gameId);
@@ -236,7 +239,7 @@ export class GameEngineService implements OnModuleInit {
       return null;
     }
 
-    await this.prepareQuestion(gameId, nextQuestionId, onTick, () => {});
+    await this.prepareQuestion(gameId, nextQuestionId, onTick, onPhaseChange);
     return nextQuestionId;
   }
 
@@ -279,11 +282,10 @@ export class GameEngineService implements OnModuleInit {
     if (status === GameStatus.FINISHED) {
       throw new Error('Cannot join: game is already finished');
     }
-    const getParticipant = await this.gameRepository.getParticipantsByGame(gameId);
-    if (getParticipant.find(p => p.teamId === teamId)?.isConnected) {
-      throw new Error('Cannot join: participant already connected');
-    }
 
+    // teamJoinGame performs an atomic conditional update; it throws if the
+    // slot is already claimed, so we don't pre-check `isConnected` here
+    // (that would be racy).
     const participant = await this.gameRepository.teamJoinGame(
       gameId,
       teamId,
@@ -426,11 +428,29 @@ export class GameEngineService implements OnModuleInit {
 
   async processAnswer(data: SubmitAnswerDto): Promise<AnswerDomain | null> {
     const status = await this.cache.getStatus(data.gameId);
-
     if (status !== GameStatus.LIVE) {
       this.logger.warn(
-        `Answer must rejected: game ${data.gameId} is ${status}`,
+        `Answer rejected: game ${data.gameId} is ${status}, expected LIVE`,
       );
+      return null;
+    }
+
+    const phase = await this.getPhase(data.gameId);
+    if (phase !== GamePhase.THINKING && phase !== GamePhase.ANSWERING) {
+      this.logger.warn(
+        `Answer rejected: game ${data.gameId} phase is ${phase}, expected THINKING or ANSWERING`,
+      );
+      return null;
+    }
+
+    const activeQuestionData = await this.cache.getActiveQuestionData(
+      data.gameId,
+    );
+    if (activeQuestionData?.questionId !== data.questionId) {
+      this.logger.warn(
+        `Answer rejected: question ${data.questionId} is not the active question for game ${data.gameId}`,
+      );
+      return null;
     }
 
     try {
