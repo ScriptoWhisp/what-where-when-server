@@ -8,7 +8,6 @@ import {
   WsException,
   OnGatewayDisconnect,
   OnGatewayInit,
-  OnGatewayConnection,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { GameEngineService } from '../service/game-engine.service';
