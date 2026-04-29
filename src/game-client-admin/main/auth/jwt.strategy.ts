@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import * as passportJwt from 'passport-jwt';
 import { ExtractJwt } from 'passport-jwt';
 import { HostRole } from './auth.dto';
+import { resolveJwtSecret } from '../../../config/jwt.config';
 
 export interface HostJwtPayload {
   sub: number;
@@ -17,9 +18,8 @@ export class HostJwtStrategy extends PassportStrategy(
   'host-jwt',
 ) {
   constructor(config: ConfigService) {
-    const secret = config.get<string>('JWT_SECRET') ?? 'dev_secret_change_me';
     super({
-      secretOrKey: secret,
+      secretOrKey: resolveJwtSecret(config),
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
     });
