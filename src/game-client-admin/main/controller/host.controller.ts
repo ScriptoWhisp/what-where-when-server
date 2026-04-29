@@ -7,6 +7,9 @@ import {
 } from '@nestjs/common';
 import { HostAuthService } from '../auth/host-auth.service';
 import { HostJwtAuthGuard } from '../auth/jwt-auth.guard';
+import { HostRolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
+import { HostRole } from '../auth/auth.dto';
 import { HostUser } from '../auth/host-user.decorator';
 import type { HostJwtPayload } from '../auth/jwt.strategy';
 import { HostService } from '../service/host.service';
@@ -55,7 +58,8 @@ export class HostController {
 
   // ---- Games (protected) ----
 
-  @UseGuards(HostJwtAuthGuard)
+  @UseGuards(HostJwtAuthGuard, HostRolesGuard)
+  @Roles(HostRole.HOST, HostRole.ADMIN)
   @Post('games')
   async listGames(
     @HostUser() host: HostJwtPayload,
@@ -68,7 +72,8 @@ export class HostController {
     );
   }
 
-  @UseGuards(HostJwtAuthGuard)
+  @UseGuards(HostJwtAuthGuard, HostRolesGuard)
+  @Roles(HostRole.HOST, HostRole.ADMIN)
   @Post('games/create')
   async createGame(
     @HostUser() host: HostJwtPayload,
@@ -77,7 +82,8 @@ export class HostController {
     return this.host.createGame(host.sub, body.title, body.date_of_event);
   }
 
-  @UseGuards(HostJwtAuthGuard)
+  @UseGuards(HostJwtAuthGuard, HostRolesGuard)
+  @Roles(HostRole.HOST, HostRole.ADMIN)
   @Post('game/get')
   async getGame(
     @HostUser() host: HostJwtPayload,
@@ -86,7 +92,8 @@ export class HostController {
     return this.host.getGame(host.sub, body.gameId);
   }
 
-  @UseGuards(HostJwtAuthGuard)
+  @UseGuards(HostJwtAuthGuard, HostRolesGuard)
+  @Roles(HostRole.HOST, HostRole.ADMIN)
   @Post('game/save')
   async saveGame(
     @HostUser() host: HostJwtPayload,
@@ -95,7 +102,8 @@ export class HostController {
     return this.host.saveGame(host.sub, body);
   }
 
-  @UseGuards(HostJwtAuthGuard)
+  @UseGuards(HostJwtAuthGuard, HostRolesGuard)
+  @Roles(HostRole.HOST, HostRole.ADMIN)
   @Post('game/export-game')
   async exportGame(
     @HostUser() host: HostJwtPayload,

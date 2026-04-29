@@ -8,10 +8,12 @@ import { HostAuthService } from './auth/host-auth.service';
 import { HostJwtStrategy } from './auth/jwt.strategy';
 import { UserRepository } from '../../repository/user.repository';
 import { HostJwtAuthGuard } from './auth/jwt-auth.guard';
+import { HostRolesGuard } from './auth/roles.guard';
 import { AppConfigModule } from '../../config/app-config.module';
 import { HostGameRepository } from '../../repository/host.game.repository';
 import { GameEngineModule } from '../../game-engine/game-engine.module';
 import { GameExportService } from './export/game-export.service';
+import { buildJwtModuleOptions } from '../../config/jwt.config';
 
 @Module({
   imports: [
@@ -20,10 +22,7 @@ import { GameExportService } from './export/game-export.service';
     PassportModule.register({ defaultStrategy: 'host-jwt' }),
     JwtModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET') ?? 'dev_secret_change_me',
-        signOptions: { expiresIn: 12 * 60 * 60 },
-      }),
+      useFactory: buildJwtModuleOptions,
     }),
   ],
   controllers: [HostController],
@@ -32,6 +31,7 @@ import { GameExportService } from './export/game-export.service';
     HostAuthService,
     HostJwtStrategy,
     HostJwtAuthGuard,
+    HostRolesGuard,
     UserRepository,
     HostGameRepository,
     GameExportService,

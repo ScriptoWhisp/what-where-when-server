@@ -96,6 +96,7 @@ describe('GameEngineGateway', () => {
       expect(service.startNextQuestion).toHaveBeenCalledWith(
         1,
         expect.any(Function),
+        expect.any(Function),
       );
     });
   });

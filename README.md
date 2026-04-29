@@ -36,6 +36,8 @@ DATABASE_URL=postgresql://www:www@localhost:5432/www?schema=public
 JWT_SECRET=change_me
 ```
 
+See [.env.example](.env.example) for the full list.
+
 ---
 
 ## Database (local development)
@@ -112,6 +114,66 @@ This repository uses **GitHub Actions** to check pull requests:
 * E2E tests with PostgreSQL
 
 All checks must pass before merging to `main`.
+
+---
+
+## Monitoring
+
+### Metrics (Prometheus + Grafana) — MVP
+
+This repository ships a minimal “batteries-included” metrics stack for
+local testing and for deployment on Hetzner:
+
+- **Prometheus** (scrapes metrics)
+- **Grafana** (dashboards)
+- **postgres_exporter** (Postgres metrics)
+- **redis_exporter** (Redis metrics)
+- **node_exporter** (host/container saturation metrics)
+
+The NestJS app exposes Prometheus-format metrics at:
+
+- `GET /metrics`
+
+#### Local run (macOS / Docker Desktop)
+
+1. Start Postgres + Redis:
+
+```bash
+docker compose up -d
+```
+
+2. Start Prometheus + Grafana:
+
+```bash
+docker compose -f docker-compose.monitoring.yml up -d
+```
+
+3. Start the server (in another terminal):
+
+```bash
+npm run start:dev
+```
+
+4. Open:
+
+- Grafana: `http://localhost:3001` (login `admin` / `admin`)
+- Prometheus: `http://localhost:9090`
+- App metrics: `http://localhost:3000/metrics`
+
+The default provisioned dashboard is **“What Where When — MVP”** (folder
+“MVP”).
+
+#### Hetzner deployment
+
+For a simple VPS deployment, you can run the same compose file on the
+server.
+
+- If your app runs **on the host** (not in Docker), Prometheus needs to
+  reach the app’s `/metrics` endpoint. Replace the `host.docker.internal`
+  target in `monitoring/prometheus/prometheus.yml` with `127.0.0.1:3000`
+  and set up Prometheus in `host` network mode, or put the app into
+  Docker as a service on the same network.
+- Restrict access to Grafana/Prometheus (firewall / reverse proxy / VPN).
 
 ---
 

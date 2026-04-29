@@ -25,6 +25,12 @@ import {
 
 @Injectable()
 export class GameRepository {
+  /**
+   * Cache of AnswerStatus.name -> id. Status rows are seeded once and never
+   * change at runtime, so caching avoids a DB round-trip per answer write.
+   */
+  private readonly statusIdCache = new Map<string, Promise<number>>();
+
   constructor(private readonly prisma: PrismaService) {}
 
   public async getGameSettings(gameId: number): Promise<GameSettings | null> {
@@ -103,26 +109,39 @@ export class GameRepository {
     });
   }
 
+  /**
+   * Atomically claims a (gameId, teamId) slot for a connecting socket. The
+   * conditional `socketId: null` filter ensures only one of two concurrent
+   * joins for the same team can win the slot; the loser sees `count === 0`
+   * and we throw, letting the caller surface "team already taken".
+   */
   async teamJoinGame(
     gameId: number,
     teamId: number,
     socketId: string,
   ): Promise<ParticipantDomain> {
-    const rawResult = await this.prisma.gameParticipant.update({
+    const claim = await this.prisma.gameParticipant.updateMany({
       where: {
-        gameId_teamId: { gameId, teamId },
+        gameId,
+        teamId,
+        socketId: null,
       },
       data: {
         isAvailable: false,
         socketId: socketId,
       },
-      include: {
-        team: true,
-        category: true,
-      },
     });
 
-    return PlayerMapper.toParticipantDomain(rawResult);
+    if (claim.count === 0) {
+      throw new Error('Cannot join: team slot is already taken');
+    }
+
+    const claimed = await this.prisma.gameParticipant.findUniqueOrThrow({
+      where: { gameId_teamId: { gameId, teamId } },
+      include: { team: true, category: true },
+    });
+
+    return PlayerMapper.toParticipantDomain(claimed);
   }
 
   async setParticipantDisconnected(socketId: string): Promise<number | null> {
@@ -162,17 +181,24 @@ export class GameRepository {
   }
 
   private async getStatusIdOrThrow(name: string): Promise<number> {
-    const status = await this.prisma.answerStatus.findFirst({
-      where: { name },
-    });
+    const cached = this.statusIdCache.get(name);
+    if (cached) return cached;
 
-    if (!status) {
-      throw new Error(
-        `Critical Error: Status "${name}" not found in database. Did you run the seed?`,
-      );
-    }
+    const promise = (async () => {
+      const status = await this.prisma.answerStatus.findFirst({
+        where: { name },
+      });
+      if (!status) {
+        throw new Error(
+          `Critical Error: Status "${name}" not found in database. Did you run the seed?`,
+        );
+      }
+      return status.id;
+    })();
 
-    return status.id;
+    this.statusIdCache.set(name, promise);
+    promise.catch(() => this.statusIdCache.delete(name));
+    return promise;
   }
 
   async activateQuestion(gameId: number, questionId: number) {
@@ -195,35 +221,53 @@ export class GameRepository {
     submittedAt: Date,
     lateBySeconds?: number,
   ): Promise<AnswerDomain> {
-    const statusId = await this.getStatusIdOrThrow(AnswerStatus.UNSET);
-    const answerToSave = {
-      gameParticipantId: participantId,
-      questionId: questionId,
-      answerText: text,
-      submittedAt: submittedAt,
-      statusId: statusId,
-      lateBySeconds: lateBySeconds,
-    };
-    const res = await this.prisma.answer.upsert({
-      where: {
-        gameParticipantId_questionId: {
+    const unsetStatusId = await this.getStatusIdOrThrow(AnswerStatus.UNSET);
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.answer.findUnique({
+        where: {
+          gameParticipantId_questionId: {
+            gameParticipantId: participantId,
+            questionId: questionId,
+          },
+        },
+        select: { id: true, statusId: true },
+      });
+
+      if (existing) {
+        const isUnjudged = existing.statusId === unsetStatusId;
+        const updated = await tx.answer.update({
+          where: { id: existing.id },
+          data: {
+            answerText: text,
+            submittedAt: submittedAt,
+            lateBySeconds: lateBySeconds,
+            ...(isUnjudged ? { statusId: unsetStatusId } : {}),
+          },
+          include: {
+            participant: { include: { team: true } },
+            status: true,
+          },
+        });
+        return AnswerMapper.toDomain(updated);
+      }
+
+      const created = await tx.answer.create({
+        data: {
           gameParticipantId: participantId,
           questionId: questionId,
+          answerText: text,
+          submittedAt: submittedAt,
+          statusId: unsetStatusId,
+          lateBySeconds: lateBySeconds,
         },
-      },
-      update: {
-        answerText: text,
-        submittedAt: submittedAt,
-        statusId: statusId,
-        lateBySeconds: lateBySeconds,
-      },
-      create: answerToSave,
-      include: {
-        participant: { include: { team: true } },
-        status: true,
-      },
+        include: {
+          participant: { include: { team: true } },
+          status: true,
+        },
+      });
+      return AnswerMapper.toDomain(created);
     });
-    return AnswerMapper.toDomain(res);
   }
 
   async getAnswerById(answerId: number): Promise<AnswerDomain> {
