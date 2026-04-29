@@ -1,25 +1,12 @@
-import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { JwtModuleOptions } from '@nestjs/jwt';
-
-const logger = new Logger('JwtConfig');
-
-const DEV_FALLBACK_SECRET = 'dev_secret_change_me';
 
 export function resolveJwtSecret(config: ConfigService): string {
   const secret = config.get<string>('JWT_SECRET');
   if (secret && secret.length > 0) return secret;
-
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error(
-      'JWT_SECRET is not set. Refusing to start in production mode without a secret.',
-    );
-  }
-
-  logger.warn(
-    `JWT_SECRET is not set. Falling back to insecure dev value (${DEV_FALLBACK_SECRET}). DO NOT use this in production.`,
+  throw new Error(
+    'JWT_SECRET is not set. Refusing to start in production mode without a secret.',
   );
-  return DEV_FALLBACK_SECRET;
 }
 
 export function buildJwtModuleOptions(
