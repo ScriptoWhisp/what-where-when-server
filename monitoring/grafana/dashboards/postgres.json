@@ -3,17 +3,37 @@
   "title": "What Where When — Postgres",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "5s",
   "tags": ["postgres", "db", "mvp"],
   "time": { "from": "now-15m", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "datname",
+        "label": "Database (datname)",
+        "type": "custom",
+        "query": "www,postgres,template1",
+        "current": { "text": "www", "value": "www", "selected": true },
+        "hide": 0,
+        "includeAll": false,
+        "multi": false,
+        "skipUrlSync": false
+      }
+    ]
+  },
   "panels": [
     {
       "type": "timeseries",
-      "title": "Connections (pg_stat_activity_count)",
+      "title": "Connections (pg_stat_database_numbackends)",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "pg_stat_activity_count", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "pg_stat_database_numbackends{datname=~\"$datname\"}",
+          "refId": "A",
+          "legendFormat": "{{datname}}"
+        }
       ]
     },
     {
@@ -21,20 +41,55 @@
       "title": "Transactions / sec",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "rate(pg_stat_database_xact_commit[1m])", "refId": "A" },
-        { "expr": "rate(pg_stat_database_xact_rollback[1m])", "refId": "B" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_xact_commit{datname=~\"$datname\"}[5m]))",
+          "refId": "A",
+          "legendFormat": "commit"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_xact_rollback{datname=~\"$datname\"}[5m]))",
+          "refId": "B",
+          "legendFormat": "rollback"
+        }
       ]
     },
     {
       "type": "timeseries",
-      "title": "Rows fetched/returned/inserted/updated/deleted",
+      "title": "Rows fetched/returned/inserted/updated/deleted (per sec)",
       "gridPos": { "x": 0, "y": 8, "w": 24, "h": 8 },
       "targets": [
-        { "expr": "rate(pg_stat_database_tup_fetched[1m])", "refId": "A" },
-        { "expr": "rate(pg_stat_database_tup_returned[1m])", "refId": "B" },
-        { "expr": "rate(pg_stat_database_tup_inserted[1m])", "refId": "C" },
-        { "expr": "rate(pg_stat_database_tup_updated[1m])", "refId": "D" },
-        { "expr": "rate(pg_stat_database_tup_deleted[1m])", "refId": "E" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_tup_fetched{datname=~\"$datname\"}[5m]))",
+          "refId": "A",
+          "legendFormat": "fetched"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_tup_returned{datname=~\"$datname\"}[5m]))",
+          "refId": "B",
+          "legendFormat": "returned"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_tup_inserted{datname=~\"$datname\"}[5m]))",
+          "refId": "C",
+          "legendFormat": "inserted"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_tup_updated{datname=~\"$datname\"}[5m]))",
+          "refId": "D",
+          "legendFormat": "updated"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_tup_deleted{datname=~\"$datname\"}[5m]))",
+          "refId": "E",
+          "legendFormat": "deleted"
+        }
       ]
     },
     {
@@ -42,7 +97,11 @@
       "title": "Deadlocks / sec",
       "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "rate(pg_stat_database_deadlocks[5m])", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_deadlocks{datname=~\"$datname\"}[5m]))",
+          "refId": "A"
+        }
       ]
     },
     {
@@ -50,10 +109,19 @@
       "title": "Blocks read vs hit (cache efficiency)",
       "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "rate(pg_stat_database_blks_read[1m])", "refId": "A" },
-        { "expr": "rate(pg_stat_database_blks_hit[1m])", "refId": "B" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_blks_read{datname=~\"$datname\"}[5m]))",
+          "refId": "A",
+          "legendFormat": "read"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(pg_stat_database_blks_hit{datname=~\"$datname\"}[5m]))",
+          "refId": "B",
+          "legendFormat": "hit"
+        }
       ]
     }
   ]
 }
-

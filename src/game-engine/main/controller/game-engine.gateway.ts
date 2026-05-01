@@ -6,6 +6,7 @@ import {
   MessageBody,
   ConnectedSocket,
   WsException,
+  OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
 } from '@nestjs/websockets';
@@ -25,10 +26,10 @@ import { GameId } from '../../../repository/contracts/common.dto';
 import { debounceTime, groupBy, mergeMap, Subject } from 'rxjs';
 import { getAllowedOrigins, isOriginAllowed } from '../../../config/cors';
 import {
+  WS_GAME_NAMESPACE_LABEL,
   wsConnections,
   wsEventsReceivedTotal,
   wsEventsSentTotal,
-  wsHandlerDurationSeconds,
 } from '../../../monitoring/metrics';
 
 /**
@@ -100,7 +101,9 @@ export enum GameBroadcastEvent {
   },
   namespace: 'game',
 })
-export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
+export class GameEngineGateway
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
+{
   @WebSocketServer() server: Server;
   private readonly logger = new Logger(GameEngineGateway.name);
   private readonly leaderboardUpdate$ = new Subject<number>();
@@ -116,10 +119,11 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
       )
       .subscribe(async (gameId) => {
         const leaderboard = await this.gameService.getLeaderboard(gameId);
-        wsEventsSentTotal.labels(GameBroadcastEvent.LeaderboardUpdate).inc(1);
-        this.server
-          .to(this.getRoom(gameId))
-          .emit(GameBroadcastEvent.LeaderboardUpdate, leaderboard);
+        this.emitWsRoom(
+          this.getRoom(gameId),
+          GameBroadcastEvent.LeaderboardUpdate,
+          leaderboard,
+        );
       });
     this.logger.log('Leaderboard debouncer initialized');
   }
@@ -128,10 +132,11 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     this.leaderboardUpdate$.next(gameId);
   }
 
-  handleConnection(client: Socket) {
-    // Socket.IO already scoped to namespace "game" via @WebSocketGateway config.
-    wsConnections.labels('/game').inc(1);
-    void client;
+  handleConnection(client: Socket): void {
+    wsConnections.labels(WS_GAME_NAMESPACE_LABEL).inc();
+    client.onAny((eventName: string) => {
+      wsEventsReceivedTotal.labels(eventName).inc();
+    });
   }
 
   @SubscribeMessage(PlayerRequestEvent.SyncHistory)
@@ -139,12 +144,8 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { participantId: number },
   ) {
-    const end = wsHandlerDurationSeconds.labels(PlayerRequestEvent.SyncHistory).startTimer();
-    wsEventsReceivedTotal.labels(PlayerRequestEvent.SyncHistory).inc(1);
     const history = await this.gameService.getTeamHistory(data.participantId);
-    wsEventsSentTotal.labels(PlayerResponseEvent.HistoryUpdate).inc(1);
-    client.emit(PlayerResponseEvent.HistoryUpdate, history);
-    end();
+    this.emitWsClient(client, PlayerResponseEvent.HistoryUpdate, history);
   }
 
   @SubscribeMessage(PlayerRequestEvent.SyncLeaderboard)
@@ -152,12 +153,8 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { gameId: GameId },
   ) {
-    const end = wsHandlerDurationSeconds.labels(PlayerRequestEvent.SyncLeaderboard).startTimer();
-    wsEventsReceivedTotal.labels(PlayerRequestEvent.SyncLeaderboard).inc(1);
     const leaderboard = await this.gameService.getLeaderboard(data.gameId);
-    wsEventsSentTotal.labels(GameBroadcastEvent.LeaderboardUpdate).inc(1);
-    client.emit(GameBroadcastEvent.LeaderboardUpdate, leaderboard);
-    end();
+    this.emitWsClient(client, GameBroadcastEvent.LeaderboardUpdate, leaderboard);
   }
 
   @UseGuards(WsJwtGuard)
@@ -166,11 +163,8 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { gameId: number },
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.StopQuestion).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.StopQuestion).inc(1);
     await this.ensureAdmin(data.gameId, client);
     await this.gameService.stopQuestion(data.gameId);
-    end();
   }
 
   @UseGuards(WsJwtGuard)
@@ -179,15 +173,12 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { gameId: number },
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.NextQuestion).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.NextQuestion).inc(1);
     await this.ensureAdmin(data.gameId, client);
 
     await this.gameService.startNextQuestion(
       data.gameId,
       (gId, seconds, phase, qData) => {
-        wsEventsSentTotal.labels(GameBroadcastEvent.TimerUpdate).inc(1);
-        this.server.to(this.getRoom(gId)).emit(GameBroadcastEvent.TimerUpdate, {
+        this.emitWsRoom(this.getRoom(gId), GameBroadcastEvent.TimerUpdate, {
           seconds,
           phase,
           activeQuestionId: qData?.questionId,
@@ -198,7 +189,6 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
         this.logger.log(`Game ${data.gameId} phase changed to ${phase}`);
       },
     );
-    end();
   }
 
   @UseGuards(WsJwtGuard)
@@ -207,17 +197,14 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { gameId: number },
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.Sync).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.Sync).inc(1);
     await this.ensureAdmin(data.gameId, client);
     client.join(this.getAdminRoom(data.gameId));
     client.join(this.getRoom(data.gameId));
-    wsEventsSentTotal.labels(GameBroadcastEvent.SyncState).inc(1);
-    client.emit(
+    this.emitWsClient(
+      client,
       GameBroadcastEvent.SyncState,
       await this.gameService.adminSyncGame(data.gameId),
     );
-    end();
   }
 
   @UseGuards(WsJwtGuard)
@@ -226,35 +213,29 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { gameId: number },
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.StartGame).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.StartGame).inc(1);
     await this.ensureAdmin(data.gameId, client);
 
     const currentStatus = await this.gameService.startGame(data.gameId);
 
-    wsEventsSentTotal.labels(GameBroadcastEvent.StatusChanged).inc(1);
-    this.server
-      .to(this.getRoom(data.gameId))
-      .emit(GameBroadcastEvent.StatusChanged, {
-        status: currentStatus,
-      });
-    end();
+    this.emitWsRoom(this.getRoom(data.gameId), GameBroadcastEvent.StatusChanged, {
+      status: currentStatus,
+    });
   }
 
   async handleDisconnect(client: Socket) {
-    wsConnections.labels('/game').dec(1);
-    const end = wsHandlerDurationSeconds.labels('disconnect').startTimer();
+    wsConnections.labels(WS_GAME_NAMESPACE_LABEL).dec();
+
     const result = await this.gameService.disconnectParticipant(client.id);
 
     if (result && result.gameId) {
-      wsEventsSentTotal.labels(GameBroadcastEvent.SyncState).inc(1);
-      this.server
-        .to(this.getAdminRoom(result.gameId))
-        .emit(GameBroadcastEvent.SyncState, {
+      this.emitWsRoom(
+        this.getAdminRoom(result.gameId),
+        GameBroadcastEvent.SyncState,
+        {
           participants: result.participants,
-        });
+        },
+      );
     }
-    end();
   }
 
   @SubscribeMessage(PlayerRequestEvent.JoinGame)
@@ -262,8 +243,6 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: JoinGameDto,
   ) {
-    const end = wsHandlerDurationSeconds.labels(PlayerRequestEvent.JoinGame).startTimer();
-    wsEventsReceivedTotal.labels(PlayerRequestEvent.JoinGame).inc(1);
     let config: Awaited<
       ReturnType<GameEngineService['getGameConfigAndJoinGame']>
     >;
@@ -279,8 +258,7 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
         e instanceof Error && e.message.startsWith('Cannot join')
           ? e.message
           : 'Cannot join game';
-      client.emit('error', { message });
-      end();
+      this.emitWsClient(client, 'error', { message });
       return;
     }
 
@@ -288,23 +266,22 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     client.data.gameId = data.gameId;
 
     client.join(this.getRoom(data.gameId));
-    wsEventsSentTotal.labels(GameBroadcastEvent.SyncState).inc(1);
-    client.emit(GameBroadcastEvent.SyncState, {
+    this.emitWsClient(client, GameBroadcastEvent.SyncState, {
       state: config.state,
       participantId: config.participantId,
     });
 
-    wsEventsSentTotal.labels(GameBroadcastEvent.SyncState).inc(1);
-    this.server
-      .to(this.getAdminRoom(data.gameId))
-      .emit(GameBroadcastEvent.SyncState, {
+    this.emitWsRoom(
+      this.getAdminRoom(data.gameId),
+      GameBroadcastEvent.SyncState,
+      {
         participants: config.participants,
-      });
+      },
+    );
 
     this.logger.log(
       `Client ${client.id} joined team ${data.teamId} in game ${data.gameId}`,
     );
-    end();
   }
 
   @UseGuards(WsJwtGuard)
@@ -313,16 +290,13 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: StartQuestionDto,
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.PrepareQuestion).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.PrepareQuestion).inc(1);
     await this.ensureAdmin(data.gameId, client);
 
     await this.gameService.prepareQuestion(
       data.gameId,
       data.questionId,
       (gId, seconds, phase, qData) => {
-        wsEventsSentTotal.labels(GameBroadcastEvent.TimerUpdate).inc(1);
-        this.server.to(this.getRoom(gId)).emit(GameBroadcastEvent.TimerUpdate, {
+        this.emitWsRoom(this.getRoom(gId), GameBroadcastEvent.TimerUpdate, {
           seconds,
           phase,
           activeQuestionId: qData?.questionId,
@@ -333,7 +307,6 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
         this.logger.log(`Game ${data.gameId} phase changed to ${phase}`);
       },
     );
-    end();
   }
 
   @UseGuards(WsJwtGuard)
@@ -342,12 +315,9 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: StartQuestionDto,
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.StartQuestion).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.StartQuestion).inc(1);
     await this.ensureAdmin(data.gameId, client);
 
     await this.gameService.startQuestionCycle(data.gameId);
-    end();
   }
 
   @SubscribeMessage(PlayerRequestEvent.SubmitAnswer)
@@ -355,25 +325,23 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: SubmitAnswerDto,
   ) {
-    const end = wsHandlerDurationSeconds.labels(PlayerRequestEvent.SubmitAnswer).startTimer();
-    wsEventsReceivedTotal.labels(PlayerRequestEvent.SubmitAnswer).inc(1);
     if (!this.ensureSocketOwnsParticipant(client, data.participantId, data.gameId)) {
-      client.emit('error', { message: 'Forbidden: socket does not own this participant' });
-      end();
+      this.emitWsClient(client, 'error', {
+        message: 'Forbidden: socket does not own this participant',
+      });
       return;
     }
 
     const result = await this.gameService.processAnswer(data);
 
     if (result) {
-      wsEventsSentTotal.labels(PlayerResponseEvent.AnswerReceived).inc(1);
-      client.emit(PlayerResponseEvent.AnswerReceived, { status: 'ok' });
-      wsEventsSentTotal.labels(AdminResponseEvent.AnswerUpdate).inc(1);
-      this.server
-        .to(this.getAdminRoom(data.gameId))
-        .emit(AdminResponseEvent.AnswerUpdate, result);
+      this.emitWsClient(client, PlayerResponseEvent.AnswerReceived, { status: 'ok' });
+      this.emitWsRoom(
+        this.getAdminRoom(data.gameId),
+        AdminResponseEvent.AnswerUpdate,
+        result,
+      );
     }
-    end();
   }
 
   @UseGuards(WsJwtGuard)
@@ -382,8 +350,6 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: JudgeAnswerDto,
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.JudgeAnswer).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.JudgeAnswer).inc(1);
     await this.ensureAdmin(data.gameId, client);
 
     const { updatedAnswer, history, socketId } =
@@ -394,18 +360,17 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
         client['user'].sub,
       );
 
-    wsEventsSentTotal.labels(AdminResponseEvent.AnswerUpdate).inc(1);
-    this.server
-      .to(this.getAdminRoom(data.gameId))
-      .emit(AdminResponseEvent.AnswerUpdate, updatedAnswer);
+    this.emitWsRoom(
+      this.getAdminRoom(data.gameId),
+      AdminResponseEvent.AnswerUpdate,
+      updatedAnswer,
+    );
 
     this.requestLeaderboardUpdate(data.gameId);
 
     if (socketId) {
-      wsEventsSentTotal.labels(PlayerResponseEvent.HistoryUpdate).inc(1);
-      this.server.to(socketId).emit(PlayerResponseEvent.HistoryUpdate, history);
+      this.emitWsRoom(socketId, PlayerResponseEvent.HistoryUpdate, history);
     }
-    end();
   }
 
   @SubscribeMessage(PlayerRequestEvent.Dispute)
@@ -413,13 +378,10 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: DisputeDto,
   ) {
-    const end = wsHandlerDurationSeconds.labels(PlayerRequestEvent.Dispute).startTimer();
-    wsEventsReceivedTotal.labels(PlayerRequestEvent.Dispute).inc(1);
     if (!this.ensureSocketBelongsToGame(client, data.gameId)) {
-      client.emit('error', {
+      this.emitWsClient(client, 'error', {
         message: 'Forbidden: socket is not part of this game',
       });
-      end();
       return;
     }
 
@@ -436,28 +398,29 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
         e instanceof Error && allowed.includes(e.message)
           ? e.message
           : 'Cannot raise dispute';
-      client.emit('error', { message });
-      end();
+      this.emitWsClient(client, 'error', { message });
       return;
     }
 
     const { updatedAnswer, leaderboard } = result;
 
-    wsEventsSentTotal.labels(AdminResponseEvent.AnswerUpdate).inc(1);
-    this.server
-      .to(this.getAdminRoom(data.gameId))
-      .emit(AdminResponseEvent.AnswerUpdate, updatedAnswer);
+    this.emitWsRoom(
+      this.getAdminRoom(data.gameId),
+      AdminResponseEvent.AnswerUpdate,
+      updatedAnswer,
+    );
 
-    wsEventsSentTotal.labels(AdminResponseEvent.NewDispute).inc(1);
-    this.server
-      .to(this.getAdminRoom(data.gameId))
-      .emit(AdminResponseEvent.NewDispute, { answerId: data.answerId });
+    this.emitWsRoom(
+      this.getAdminRoom(data.gameId),
+      AdminResponseEvent.NewDispute,
+      { answerId: data.answerId },
+    );
 
-    wsEventsSentTotal.labels(GameBroadcastEvent.LeaderboardUpdate).inc(1);
-    this.server
-      .to(this.getRoom(data.gameId))
-      .emit(GameBroadcastEvent.LeaderboardUpdate, leaderboard);
-    end();
+    this.emitWsRoom(
+      this.getRoom(data.gameId),
+      GameBroadcastEvent.LeaderboardUpdate,
+      leaderboard,
+    );
   }
 
   @UseGuards(WsJwtGuard)
@@ -466,15 +429,9 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { gameId: number },
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.PauseTimer).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.PauseTimer).inc(1);
     await this.ensureAdmin(data.gameId, client);
     await this.gameService.pauseTimer(data.gameId);
-    wsEventsSentTotal.labels(GameBroadcastEvent.TimerPaused).inc(1);
-    this.server
-      .to(this.getRoom(data.gameId))
-      .emit(GameBroadcastEvent.TimerPaused);
-    end();
+    this.emitWsRoom(this.getRoom(data.gameId), GameBroadcastEvent.TimerPaused);
   }
 
   @UseGuards(WsJwtGuard)
@@ -483,15 +440,9 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { gameId: number },
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.ResumeTimer).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.ResumeTimer).inc(1);
     await this.ensureAdmin(data.gameId, client);
     await this.gameService.resumeTimer(data.gameId);
-    wsEventsSentTotal.labels(GameBroadcastEvent.TimerResumed).inc(1);
-    this.server
-      .to(this.getRoom(data.gameId))
-      .emit(GameBroadcastEvent.TimerResumed);
-    end();
+    this.emitWsRoom(this.getRoom(data.gameId), GameBroadcastEvent.TimerResumed);
   }
 
   @UseGuards(WsJwtGuard)
@@ -500,11 +451,8 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: AdjustTimeDto,
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.AdjustTime).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.AdjustTime).inc(1);
     await this.ensureAdmin(data.gameId, client);
     await this.gameService.adjustTime(data.gameId, data.delta);
-    end();
   }
 
   private async ensureAdmin(gameId: number, client: Socket) {
@@ -546,18 +494,30 @@ export class GameEngineGateway implements OnGatewayDisconnect, OnGatewayInit {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { gameId: number },
   ) {
-    const end = wsHandlerDurationSeconds.labels(AdminRequestEvent.FinishGame).startTimer();
-    wsEventsReceivedTotal.labels(AdminRequestEvent.FinishGame).inc(1);
     await this.ensureAdmin(data.gameId, client);
     const status = await this.gameService.finishGame(data.gameId);
 
-    wsEventsSentTotal.labels(GameBroadcastEvent.StatusChanged).inc(1);
-    this.server
-      .to(this.getRoom(data.gameId))
-      .emit(GameBroadcastEvent.StatusChanged, {
-        status,
-      });
-    end();
+    this.emitWsRoom(this.getRoom(data.gameId), GameBroadcastEvent.StatusChanged, {
+      status,
+    });
+  }
+
+  private emitWsClient(client: Socket, event: string, payload?: unknown): void {
+    wsEventsSentTotal.labels(event).inc();
+    if (payload === undefined) {
+      client.emit(event);
+      return;
+    }
+    client.emit(event, payload);
+  }
+
+  private emitWsRoom(room: string, event: string, payload?: unknown): void {
+    wsEventsSentTotal.labels(event).inc();
+    if (payload === undefined) {
+      this.server.to(room).emit(event);
+      return;
+    }
+    this.server.to(room).emit(event, payload);
   }
 
   private getRoom(gameId: number) {

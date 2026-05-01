@@ -15,6 +15,9 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
+      # Grafana talks to Prometheus only here so `http://prometheus:9090` always resolves.
+      - monitoring-internal
+      # Same network as db/redis/exporters for scraping.
       - app-net
 
   grafana:
@@ -32,7 +35,7 @@ services:
     depends_on:
       - prometheus
     networks:
-      - app-net
+      - monitoring-internal
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.17.1
@@ -72,6 +75,8 @@ volumes:
   grafana_data:
 
 networks:
+  monitoring-internal:
+    driver: bridge
   app-net:
     # Must match the network that your db/redis live in.
     # Default (when you run `docker compose up -d` in THIS repo):
