@@ -134,7 +134,7 @@ export class GameEngineGateway
 
   handleConnection(client: Socket): void {
     wsConnections.labels(WS_GAME_NAMESPACE_LABEL).inc();
-    client.onAny((eventName: string, ..._: unknown[]) => {
+    client.onAny((eventName: string) => {
       wsEventsReceivedTotal.labels(eventName).inc();
     });
   }
