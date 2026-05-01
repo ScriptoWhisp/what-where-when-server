@@ -3,61 +3,104 @@
   "title": "What Where When — Redis",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "5s",
   "tags": ["redis", "cache", "mvp"],
   "time": { "from": "now-15m", "to": "now" },
   "panels": [
     {
       "type": "timeseries",
-      "title": "Commands / sec (ops/sec)",
+      "title": "Commands / sec (sum over cmd)",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "rate(redis_commands_processed_total[1m])", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(redis_commands_total[5m]))",
+          "refId": "A",
+          "legendFormat": "total"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Commands / sec (by cmd, top series)",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "topk(12, sum by (cmd) (rate(redis_commands_total[5m])))",
+          "refId": "A",
+          "legendFormat": "{{cmd}}"
+        }
       ]
     },
     {
       "type": "timeseries",
       "title": "Connected clients",
-      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "redis_connected_clients", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "redis_connected_clients",
+          "refId": "A"
+        }
       ]
     },
     {
       "type": "timeseries",
-      "title": "Memory used (bytes)",
-      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "title": "Memory used",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "redis_memory_used_bytes", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "redis_memory_used_bytes",
+          "refId": "A"
+        }
       ],
       "fieldConfig": { "defaults": { "unit": "bytes" } }
     },
     {
       "type": "timeseries",
-      "title": "Keyspace hits vs misses",
-      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "title": "Keyspace hits vs misses / sec",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "rate(redis_keyspace_hits_total[1m])", "refId": "A" },
-        { "expr": "rate(redis_keyspace_misses_total[1m])", "refId": "B" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(redis_keyspace_hits_total[5m]))",
+          "refId": "A",
+          "legendFormat": "hits"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(redis_keyspace_misses_total[5m]))",
+          "refId": "B",
+          "legendFormat": "misses"
+        }
       ]
     },
     {
       "type": "timeseries",
       "title": "Evictions / sec",
-      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "rate(redis_evicted_keys_total[5m])", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(redis_evicted_keys_total[5m]))",
+          "refId": "A"
+        }
       ]
     },
     {
       "type": "timeseries",
       "title": "Expired keys / sec",
-      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 8 },
       "targets": [
-        { "expr": "rate(redis_expired_keys_total[5m])", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(redis_expired_keys_total[5m]))",
+          "refId": "A"
+        }
       ]
     }
   ]
 }
-

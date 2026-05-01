@@ -1,5 +1,8 @@
 import { Counter, Histogram, Gauge, Registry, collectDefaultMetrics } from 'prom-client';
 
+/** Grafana / Prometheus label for Socket.IO gateway `namespace: 'game'` (`/game` on wire). */
+export const WS_GAME_NAMESPACE_LABEL = '/game';
+
 export const registry = new Registry();
 collectDefaultMetrics({ register: registry });
 

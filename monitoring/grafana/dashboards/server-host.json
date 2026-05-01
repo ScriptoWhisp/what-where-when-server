@@ -3,7 +3,7 @@
   "title": "What Where When — Server & Host",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "5s",
   "tags": ["server", "node", "mvp"],
   "time": { "from": "now-15m", "to": "now" },
@@ -13,7 +13,11 @@
       "title": "HTTP RPS (all routes)",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "sum(rate(http_requests_total[1m]))", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(rate(http_requests_total[1m]))",
+          "refId": "A"
+        }
       ]
     },
     {
@@ -22,6 +26,7 @@
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "targets": [
         {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
           "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[1m])))",
           "refId": "A"
         }
@@ -32,7 +37,11 @@
       "title": "HTTP req/min (all routes)",
       "gridPos": { "x": 0, "y": 8, "w": 12, "h": 6 },
       "targets": [
-        { "expr": "sum(increase(http_requests_total[1m]))", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "sum(increase(http_requests_total[1m]))",
+          "refId": "A"
+        }
       ]
     },
     {
@@ -41,6 +50,7 @@
       "gridPos": { "x": 12, "y": 8, "w": 12, "h": 6 },
       "targets": [
         {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
           "expr": "sum(rate(http_request_duration_seconds_sum[1m])) / sum(rate(http_request_duration_seconds_count[1m]))",
           "refId": "A"
         }
@@ -51,7 +61,11 @@
       "title": "Node.js heap used (bytes)",
       "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "nodejs_heap_size_used_bytes", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "nodejs_heap_size_used_bytes",
+          "refId": "A"
+        }
       ],
       "fieldConfig": { "defaults": { "unit": "bytes" } }
     },
@@ -60,7 +74,11 @@
       "title": "Node.js event loop lag (s)",
       "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
       "targets": [
-        { "expr": "nodejs_eventloop_lag_seconds", "refId": "A" }
+        {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
+          "expr": "nodejs_eventloop_lag_seconds",
+          "refId": "A"
+        }
       ]
     },
     {
@@ -69,6 +87,7 @@
       "gridPos": { "x": 0, "y": 22, "w": 12, "h": 8 },
       "targets": [
         {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
           "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[1m])) * 100)",
           "refId": "A"
         }
@@ -81,6 +100,7 @@
       "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
       "targets": [
         {
+          "datasource": { "type": "prometheus", "uid": "www-prometheus" },
           "expr": "node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes",
           "refId": "A"
         }
@@ -89,4 +109,3 @@
     }
   ]
 }
-

@@ -25,11 +25,25 @@ export class GameEngineService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    const cleared = await this.gameRepository.clearAllParticipantSockets();
-    if (cleared > 0) {
-      this.logger.log(
-        `Reset ${cleared} participant socket binding(s) after server start (stale connections)`,
-      );
+    try {
+      const cleared = await this.gameRepository.clearAllParticipantSockets();
+      if (cleared > 0) {
+        this.logger.log(
+          `Reset ${cleared} participant socket binding(s) after server start (stale connections)`,
+        );
+      }
+    } catch (e: unknown) {
+      if (
+        typeof e === 'object' &&
+        e !== null &&
+        'code' in e &&
+        (e as { code: string }).code === 'P2021'
+      ) {
+        this.logger.error(
+          'PostgreSQL is reachable but Prisma tables are missing (P2021). Apply migrations for this DATABASE_URL: local dev `npx prisma migrate dev` (or `db push`), production `npx prisma migrate deploy`.',
+        );
+      }
+      throw e;
     }
   }
 

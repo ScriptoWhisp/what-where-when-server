@@ -54,6 +54,8 @@ Apply Prisma schema:
 npx prisma migrate dev
 ```
 
+If you see `P2021` / “table does not exist” on startup, the database URL points at an empty or wrong database. Create the schema with the commands above (dev) or `npx prisma migrate deploy` on servers/CI after `docker compose up -d` (or your managed Postgres).
+
 Generate test data:
 
 ```bash
@@ -163,6 +165,14 @@ npm run start:dev
 The default provisioned dashboard is **“What Where When — MVP”** (folder
 “MVP”).
 
+Provisioned Prometheus datasource UID is **`www-prometheus`** (see
+`monitoring/grafana/provisioning/datasources/datasource.yml`); all bundled
+dashboards reference that UID. After changing provisioning, restart Grafana
+(`docker compose … restart grafana`) so it reloads JSON. If you had an old
+`grafana_data` volume created before this UID existed, remove the volume once
+or delete duplicate “Prometheus” datasources in Grafana so only the
+provisioned one remains.
+
 #### Hetzner deployment
 
 For a simple VPS deployment, you can run the same compose file on the
@@ -173,6 +183,13 @@ server.
   target in `monitoring/prometheus/prometheus.yml` with `127.0.0.1:3000`
   and set up Prometheus in `host` network mode, or put the app into
   Docker as a service on the same network.
+- Grafana’s datasource is `http://prometheus:9090` (Docker DNS). The
+  monitoring compose puts Grafana and Prometheus on a dedicated
+  `monitoring-internal` bridge so that name always resolves. If you still
+  see `lookup prometheus ... no such host`, recreate the stack:
+  `docker compose -f docker-compose.monitoring.yml down && docker compose -f docker-compose.monitoring.yml up -d`
+  and ensure you are not running a standalone Grafana container with
+  that URL while Prometheus runs elsewhere.
 - Restrict access to Grafana/Prometheus (firewall / reverse proxy / VPN).
 
 ---
