@@ -16,14 +16,15 @@ export class WsMetricsInterceptor implements NestInterceptor {
     }
 
     const patternRaw = context.switchToWs().getPattern() as unknown;
-    const eventLabel =
+    const joined =
       typeof patternRaw === 'string'
         ? patternRaw
         : Array.isArray(patternRaw)
           ? patternRaw.filter((p: unknown): p is string => typeof p === 'string').join(',')
-          : 'unknown';
+          : '';
+    const eventLabel = joined.trim() || 'unknown';
 
-    const endTimer = wsHandlerDurationSeconds.labels(eventLabel || 'unknown').startTimer();
+    const endTimer = wsHandlerDurationSeconds.labels(eventLabel).startTimer();
 
     return next.handle().pipe(finalize(() => endTimer()));
   }

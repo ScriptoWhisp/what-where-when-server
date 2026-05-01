@@ -30,6 +30,7 @@ import {
   wsConnections,
   wsEventsReceivedTotal,
   wsEventsSentTotal,
+  wsHandlerDurationSeconds,
 } from '../../../monitoring/metrics';
 import { WsMetricsInterceptor } from '../../../monitoring/ws-metrics.interceptor';
 
@@ -89,6 +90,12 @@ export enum GameBroadcastEvent {
   TimerResumed = 'timer_resumed',
 }
 
+/** Only @SubscribeMessage event names — avoids Prometheus label cardinality from arbitrary client packets. */
+const TRACKED_WS_INBOUND_EVENTS = new Set<string>([
+  ...Object.values(AdminRequestEvent),
+  ...Object.values(PlayerRequestEvent),
+]);
+
 @UseFilters(WsExceptionsFilter)
 @UseInterceptors(WsMetricsInterceptor)
 @WebSocketGateway({
@@ -137,7 +144,9 @@ export class GameEngineGateway
   handleConnection(client: Socket): void {
     wsConnections.labels(WS_GAME_NAMESPACE_LABEL).inc();
     client.onAny((eventName: string) => {
-      wsEventsReceivedTotal.labels(eventName).inc();
+      if (TRACKED_WS_INBOUND_EVENTS.has(eventName)) {
+        wsEventsReceivedTotal.labels(eventName).inc();
+      }
     });
   }
 
@@ -227,16 +236,21 @@ export class GameEngineGateway
   async handleDisconnect(client: Socket) {
     wsConnections.labels(WS_GAME_NAMESPACE_LABEL).dec();
 
-    const result = await this.gameService.disconnectParticipant(client.id);
+    const endDisconnectTimer = wsHandlerDurationSeconds.labels('disconnect').startTimer();
+    try {
+      const result = await this.gameService.disconnectParticipant(client.id);
 
-    if (result && result.gameId) {
-      this.emitWsRoom(
-        this.getAdminRoom(result.gameId),
-        GameBroadcastEvent.SyncState,
-        {
-          participants: result.participants,
-        },
-      );
+      if (result && result.gameId) {
+        this.emitWsRoom(
+          this.getAdminRoom(result.gameId),
+          GameBroadcastEvent.SyncState,
+          {
+            participants: result.participants,
+          },
+        );
+      }
+    } finally {
+      endDisconnectTimer();
     }
   }
 
