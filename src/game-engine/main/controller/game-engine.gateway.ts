@@ -1,4 +1,4 @@
-import { UseGuards, Logger, UseFilters, UseInterceptors } from '@nestjs/common';
+import { UseGuards, Logger, UseFilters } from '@nestjs/common';
 import {
   WebSocketGateway,
   WebSocketServer,
@@ -30,9 +30,7 @@ import {
   wsConnections,
   wsEventsReceivedTotal,
   wsEventsSentTotal,
-  wsHandlerDurationSeconds,
 } from '../../../monitoring/metrics';
-import { WsMetricsInterceptor } from '../../../monitoring/ws-metrics.interceptor';
 
 /**
  * Events sent from the Host/Admin to the Server
@@ -90,14 +88,7 @@ export enum GameBroadcastEvent {
   TimerResumed = 'timer_resumed',
 }
 
-/** Only @SubscribeMessage event names — avoids Prometheus label cardinality from arbitrary client packets. */
-const TRACKED_WS_INBOUND_EVENTS = new Set<string>([
-  ...Object.values(AdminRequestEvent),
-  ...Object.values(PlayerRequestEvent),
-]);
-
 @UseFilters(WsExceptionsFilter)
-@UseInterceptors(WsMetricsInterceptor)
 @WebSocketGateway({
   cors: {
     origin: (
@@ -143,10 +134,8 @@ export class GameEngineGateway
 
   handleConnection(client: Socket): void {
     wsConnections.labels(WS_GAME_NAMESPACE_LABEL).inc();
-    client.onAny((eventName: string) => {
-      if (TRACKED_WS_INBOUND_EVENTS.has(eventName)) {
-        wsEventsReceivedTotal.labels(eventName).inc();
-      }
+    client.onAny((eventName: string, ..._: unknown[]) => {
+      wsEventsReceivedTotal.labels(eventName).inc();
     });
   }
 
@@ -236,21 +225,16 @@ export class GameEngineGateway
   async handleDisconnect(client: Socket) {
     wsConnections.labels(WS_GAME_NAMESPACE_LABEL).dec();
 
-    const endDisconnectTimer = wsHandlerDurationSeconds.labels('disconnect').startTimer();
-    try {
-      const result = await this.gameService.disconnectParticipant(client.id);
+    const result = await this.gameService.disconnectParticipant(client.id);
 
-      if (result && result.gameId) {
-        this.emitWsRoom(
-          this.getAdminRoom(result.gameId),
-          GameBroadcastEvent.SyncState,
-          {
-            participants: result.participants,
-          },
-        );
-      }
-    } finally {
-      endDisconnectTimer();
+    if (result && result.gameId) {
+      this.emitWsRoom(
+        this.getAdminRoom(result.gameId),
+        GameBroadcastEvent.SyncState,
+        {
+          participants: result.participants,
+        },
+      );
     }
   }
 

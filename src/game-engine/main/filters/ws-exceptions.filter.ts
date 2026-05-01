@@ -33,13 +33,12 @@ export class WsExceptionsFilter implements ExceptionFilter {
       typeof ctx.getPattern === 'function'
         ? (ctx.getPattern() as string | string[] | unknown)
         : undefined;
-    const eventNameJoined =
+    const eventName =
       typeof rawPattern === 'string'
         ? rawPattern
         : Array.isArray(rawPattern)
           ? rawPattern.filter((x): x is string => typeof x === 'string').join(',')
-          : '';
-    const eventName = eventNameJoined.trim() || 'unknown';
+          : 'unknown';
     const kind =
       exception instanceof WsException || exception instanceof JudgingNotAllowedError
         ? 'expected'
@@ -50,7 +49,7 @@ export class WsExceptionsFilter implements ExceptionFilter {
     const payload = this.toClientPayload(exception);
 
     this.logger.error(
-      `WS exception on event "${eventName}" for socket ${client?.id}: ${
+      `WS exception on event "${(ctx.getPattern && ctx.getPattern()) || 'unknown'}" for socket ${client?.id}: ${
         exception instanceof Error ? exception.stack || exception.message : String(exception)
       }`,
     );

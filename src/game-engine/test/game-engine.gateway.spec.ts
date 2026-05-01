@@ -7,7 +7,6 @@ import {
   GameBroadcastEvent,
   GameEngineGateway,
 } from '../main/controller/game-engine.gateway';
-import { WsMetricsInterceptor } from '../../monitoring/ws-metrics.interceptor';
 import { WsJwtGuard } from '../main/guards/ws-jwt.guard';
 import { GameStatus } from '../../repository/contracts/game-engine.dto';
 
@@ -46,7 +45,6 @@ describe('GameEngineGateway', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GameEngineGateway,
-        WsMetricsInterceptor,
         WsJwtGuard,
         { provide: GameEngineService, useValue: mockService },
         { provide: GameRepository, useValue: mockRepo },
